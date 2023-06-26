@@ -1,19 +1,19 @@
 ﻿using System.Drawing;
 
-namespace LorAuto.GameCard;
+namespace LorAuto.Card;
 
 [Serializable]
-public sealed class GameInGameCard : GameCard
+public sealed class InGameCard : GameCard
 {
     public Point TopCenterPos { get; }
     public required bool IsLocal { get; init; }
 
-    public GameInGameCard(int x, int y, int w, int h)
+    public InGameCard(int x, int y, int w, int h)
     {
         TopCenterPos = new Point(x + w / 2, y - h / 4);
     }
 
-    public GameInGameCard(Point position)
+    public InGameCard(Point position)
     {
         TopCenterPos = position;
     }

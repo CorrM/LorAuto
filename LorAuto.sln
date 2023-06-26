@@ -4,6 +4,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto", "src\LorAuto\LorA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto.Test", "test\LorAuto.Test\LorAuto.Test.csproj", "{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto.Cli", "src\LorAuto.Cli\LorAuto.Cli.csproj", "{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{DC95812C-B749-4AD3-8993-E630CE8DAEE5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +22,12 @@ Global
 		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E} = {DC95812C-B749-4AD3-8993-E630CE8DAEE5}
 	EndGlobalSection
 EndGlobal

@@ -2,22 +2,37 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LorAuto.Card;
 
 namespace LorAuto.Client;
 
 public sealed class CardSetsManager
 {
+    private readonly static HttpClient _httpClient;
+    
     private readonly string[] _forbiddenCardSets = { "set6ab" };
     private readonly string _cardSetsDirName;
-    private readonly HttpClient _httpClient;
 
-    public CardSetsManager(string cardSetsDirName)
+    public bool CardSetsLoaded { get; private set; }
+    public Dictionary<string, GameCardSet> CardSets { get; }
+
+    static CardSetsManager()
     {
-        _cardSetsDirName = cardSetsDirName;
         _httpClient = new HttpClient()
         {
             BaseAddress = new Uri("https://dd.b.pvp.net/latest/")
-        };
+        }; 
+    }
+    
+    public CardSetsManager(string cardSetsDirName)
+    {
+        _cardSetsDirName = cardSetsDirName;
+        CardSets = new Dictionary<string, GameCardSet>();
+    }
+
+    private string GetCardSetsPath()
+    {
+        return Path.Combine(Environment.CurrentDirectory, _cardSetsDirName);
     }
 
     private async Task DownloadCardSetAsync(string cardSetName, bool addIndent = false, CancellationToken ct = default)
@@ -42,10 +57,59 @@ public sealed class CardSetsManager
 
         await File.WriteAllTextAsync(cardSetPath, cardSetJson, ct);
     }
+
+    private async Task<GameCardSet> ParseCardSetCardsAsync(string cardSetName, CancellationToken ct = default)
+    {
+        string setFileName = $"{cardSetName}.json";
+        string cardSetPath = Path.Combine(GetCardSetsPath(), setFileName);
+        if (!File.Exists(cardSetPath))
+            throw new FileNotFoundException($"CardSet('{cardSetName}') not found.", setFileName);
+
+        await using FileStream fileStream = File.OpenRead(cardSetPath);
+        JsonArray? cardsInSetJson = await JsonSerializer.DeserializeAsync<JsonArray>(fileStream, cancellationToken: ct).ConfigureAwait(false);
+        if (cardsInSetJson is null)
+            throw new UnreachableException();
+
+        var cardsInSet = new Dictionary<string, GameCard>(cardsInSetJson.Count);
+        for (int i = 0; i < cardsInSetJson.Count; i++)
+        {
+            JsonNode? cardJson = cardsInSetJson[(Index)i];
+            if (cardJson is null)
+                throw new UnreachableException();
+
+            var gameCard = new GameCard()
+            {
+                Name = cardJson["name"]!.GetValue<string>(),
+                CardCode = cardJson["cardCode"]!.GetValue<string>(),
+                Cost = cardJson["cost"]!.GetValue<int>(),
+                Attack = cardJson["attack"]!.GetValue<int>(),
+                Health = cardJson["health"]!.GetValue<int>(),
+                Type = Enum.Parse<GameCardType>(cardJson["type"]!.GetValue<string>()),
+                Keywords = cardJson["keywordRefs"]!.AsArray().Select(j => j!.GetValue<string>()).ToArray(),
+                Description = cardJson["descriptionRaw"]!.GetValue<string>(),
+            };
+            cardsInSet.Add(gameCard.CardCode, gameCard);
+        }
+
+        return new GameCardSet()
+        {
+            Name = cardSetName,
+            Cards = cardsInSet
+        };
+    }
+    
+    public string[] GetExistsCardSetsNames()
+    {
+        string cardSetsBasePath = GetCardSetsPath();
+
+        return Directory.EnumerateFiles(cardSetsBasePath)
+            .Select(s => Path.GetFileNameWithoutExtension(s)!)
+            .ToArray();
+    }
     
     public async Task DownloadMissingCardSetsAsync(CancellationToken ct = default)
     {
-        string cardSetsBasePath = Path.Combine(Environment.CurrentDirectory, _cardSetsDirName);
+        string cardSetsBasePath = GetCardSetsPath();
         if (!Directory.Exists(cardSetsBasePath))
             Directory.CreateDirectory(cardSetsBasePath);
 
@@ -79,9 +143,7 @@ public sealed class CardSetsManager
             }
         }
 
-        string?[] existsCardSetsNames = Directory.EnumerateFiles(cardSetsBasePath)
-            .Select(Path.GetFileNameWithoutExtension)
-            .ToArray();
+        string[] existsCardSetsNames = GetExistsCardSetsNames();
 
         IEnumerable<Task> tasks = cardSets
             .Where(setName => !existsCardSetsNames.Contains(setName) && !_forbiddenCardSets.Contains(setName))
@@ -95,7 +157,7 @@ public sealed class CardSetsManager
         GC.WaitForPendingFinalizers();
         GC.Collect();
     }
-    
+
     public bool DeleteCardSets()
     {
         string cardSetsPath = Path.Combine(Environment.CurrentDirectory, _cardSetsDirName);
@@ -111,6 +173,28 @@ public sealed class CardSetsManager
             return false;
         }
 
+        CardSetsLoaded = false;
+        CardSets.Clear();
+
         return true;
+    }
+
+    public async Task LoadCardSetsAsync(CancellationToken ct = default)
+    {
+        // Clear old data
+        CardSetsLoaded = false;
+        CardSets.Clear();
+
+        // Load card sets
+        foreach (string cardSetName in GetExistsCardSetsNames())
+        {
+            if (ct.IsCancellationRequested)
+                throw new TaskCanceledException();
+            
+            GameCardSet cardSet = await ParseCardSetCardsAsync(cardSetName, ct).ConfigureAwait(false);
+            CardSets.Add(cardSetName, cardSet);
+        }
+
+        CardSetsLoaded = true;
     }
 }
