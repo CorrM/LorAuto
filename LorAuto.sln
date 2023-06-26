@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto", "src\LorAuto\LorAuto.csproj", "{A99CC236-94FF-4AB3-950E-FCBC7D9B9D26}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto.Test", "test\LorAuto.Test\LorAuto.Test.csproj", "{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A99CC236-94FF-4AB3-950E-FCBC7D9B9D26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A99CC236-94FF-4AB3-950E-FCBC7D9B9D26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A99CC236-94FF-4AB3-950E-FCBC7D9B9D26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A99CC236-94FF-4AB3-950E-FCBC7D9B9D26}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
