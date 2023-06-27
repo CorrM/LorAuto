@@ -13,14 +13,14 @@ public enum GameCardType
 [Serializable]
 public class GameCard
 {
-    public required string Name { get; init; }
-    public required string CardCode { get; init; }
-    public required int Cost { get; init; }
-    public required int Attack { get; init; }
-    public required int Health { get; init; }
-    public required GameCardType Type { get; init; }
-    public required string[] Keywords { get; init; }
-    public required string Description { get; init; }
+    public string Name { get; init; } = null!;
+    public string CardCode { get; init; } = null!;
+    public int Cost { get; init; }
+    public int Attack { get; init; }
+    public int Health { get; init; }
+    public GameCardType Type { get; init; }
+    public string[] Keywords { get; init; } = null!;
+    public string Description { get; init; } = null!;
 
     public override string ToString()
     {

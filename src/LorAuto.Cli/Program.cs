@@ -1,10 +1,37 @@
-﻿using LorAuto.Client;
-
-Console.Write("Downloading missing card sets ... ");
+﻿using System.Diagnostics;
+using LorAuto;
+using LorAuto.Client;
+using LorAuto.GameState;
+using LorAuto.Strategies;
 
 var cardSetsManager = new CardSetsManager("CardSets");
 
+Console.Write("Downloading missing card sets ... ");
 await cardSetsManager.DownloadMissingCardSetsAsync().ConfigureAwait(false);
-await cardSetsManager.LoadCardSetsAsync().ConfigureAwait(false);
-
 Console.WriteLine("Done");
+
+Console.Write("Load card sets ... ");
+await cardSetsManager.LoadCardSetsAsync().ConfigureAwait(false);
+Console.WriteLine("Done");
+
+using var gameClientApi = new GameClientApi();
+using var stateMachine = new StateMachine(cardSetsManager, gameClientApi);
+
+bool targetHandle = stateMachine.Start();
+if (!targetHandle)
+{
+    Console.WriteLine("Legends of Runeterra isn't running!");
+    return -1;
+}
+
+BoardState? cardsOnBoard = await stateMachine.GetBoardState().ConfigureAwait(false);
+if (cardsOnBoard is null)
+    throw new UnreachableException();
+
+while (!stateMachine.IsReady())
+    Thread.Sleep(8);
+
+var bot = new Bot(stateMachine, gameClientApi, new Strategy());
+bot.SelectDeck(GameType.Eternal, true);
+
+return 0;

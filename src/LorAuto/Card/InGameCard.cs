@@ -1,4 +1,6 @@
 ﻿using System.Drawing;
+using System.Reflection;
+using Point = System.Drawing.Point;
 
 namespace LorAuto.Card;
 
@@ -6,20 +8,21 @@ namespace LorAuto.Card;
 public sealed class InGameCard : GameCard
 {
     public Point TopCenterPos { get; }
-    public required bool IsLocal { get; init; }
+    public bool IsLocalPlayer { get; init; }
 
-    public InGameCard(int x, int y, int w, int h)
+    public InGameCard(GameCard otherCard, int x, int y, int w, int h, bool isLocalPlayer)
     {
-        TopCenterPos = new Point(x + w / 2, y - h / 4);
-    }
-
-    public InGameCard(Point position)
-    {
-        TopCenterPos = position;
+        // Using reflection is better than not forgetting to copy any property
+        PropertyInfo[] propertyInfos = typeof(GameCard).GetProperties(BindingFlags.Instance | BindingFlags.Public);
+        foreach (PropertyInfo info in propertyInfos)
+            info.SetValue(this, info.GetValue(otherCard));
+        
+        TopCenterPos = new Point(x + (w / 2), y - (h / 4));
+        IsLocalPlayer = isLocalPlayer;
     }
     
     public override string ToString()
     {
-        return $"InGameCard({base.ToString()} -- TopCenter: ({TopCenterPos}); IsLocal: {IsLocal})";
+        return $"InGameCard({base.ToString()} -- TopCenter: ({TopCenterPos}); IsLocalPlayer: {IsLocalPlayer})";
     }
 }

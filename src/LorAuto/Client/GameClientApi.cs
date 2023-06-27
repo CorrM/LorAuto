@@ -12,7 +12,7 @@ internal enum GameClientApiRequestType
     GameResult
 }
 
-public sealed class GameClientApi
+public sealed class GameClientApi : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly Dictionary<GameClientApiRequestType, string> _requestsMap;
@@ -102,5 +102,10 @@ public sealed class GameClientApi
         {
             return (null, e);
         }
+    }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
     }
 }
