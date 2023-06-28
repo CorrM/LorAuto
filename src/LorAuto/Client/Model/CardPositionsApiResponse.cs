@@ -20,7 +20,7 @@ public sealed class GameClientRectangle
 }
 
 [Serializable]
-public sealed class CardPositionsApiRequest
+public sealed class CardPositionsApiResponse
 {
     public required string PlayerName { get; init; }
     public required string OpponentName { get; init; }

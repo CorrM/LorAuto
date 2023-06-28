@@ -1,9 +1,10 @@
 ﻿using LorAuto.Card;
 
-namespace LorAuto.Client;
+namespace LorAuto.Client.Model;
 
 public sealed class BoardState
 {
+    public List<InGameCard> AllCards { get; }
     public List<InGameCard> CardsHand { get; }
     public List<InGameCard> CardsBoard { get; }
     public List<InGameCard> CardsMulligan { get; }
@@ -15,6 +16,7 @@ public sealed class BoardState
 
     public BoardState()
     {
+        AllCards = new List<InGameCard>();
         CardsHand = new List<InGameCard>();
         CardsBoard = new List<InGameCard>();
         CardsMulligan = new List<InGameCard>();

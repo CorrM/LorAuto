@@ -21,8 +21,7 @@ public sealed class GameClientApi : IDisposable
     {
         _httpClient = new HttpClient()
         {
-            BaseAddress = new Uri($"http://127.0.0.1:{port}/"),
-            Timeout = TimeSpan.FromSeconds(10)
+            BaseAddress = new Uri($"http://127.0.0.1:{port}/")
         };
         
         _requestsMap = new Dictionary<GameClientApiRequestType, string>()
@@ -38,7 +37,7 @@ public sealed class GameClientApi : IDisposable
         return await _httpClient.GetStringAsync(_requestsMap[apiRequestType], ct).ConfigureAwait(false);
     }
     
-    public async Task<(ActiveDeckApiResult?, Exception?)> GetActiveDeckAsync(CancellationToken ct = default)
+    public async Task<(ActiveDeckApiResponse?, Exception?)> GetActiveDeckAsync(CancellationToken ct = default)
     {
         try
         {
@@ -61,7 +60,7 @@ public sealed class GameClientApi : IDisposable
                     .ToList();
             }
 
-            var activeDeck = new ActiveDeckApiResult()
+            var activeDeck = new ActiveDeckApiResponse()
             {
                 DeckCode = activeDeckJson["DeckCode"]?.GetValue<string>(),
                 CardsInDeck = cardInDecks
@@ -74,12 +73,12 @@ public sealed class GameClientApi : IDisposable
         }
     }
     
-    public async Task<(CardPositionsApiRequest?, Exception?)> GetCardPositionsAsync(CancellationToken ct = default)
+    public async Task<(CardPositionsApiResponse?, Exception?)> GetCardPositionsAsync(CancellationToken ct = default)
     {
         try
         {
             string requestData = await GetRequestAsync(GameClientApiRequestType.CardPositions, ct).ConfigureAwait(false);
-            var cardPositions = JsonSerializer.Deserialize<CardPositionsApiRequest?>(requestData);
+            var cardPositions = JsonSerializer.Deserialize<CardPositionsApiResponse?>(requestData);
         
             return (cardPositions, null);
         }
@@ -89,12 +88,12 @@ public sealed class GameClientApi : IDisposable
         }
     }
     
-    public async Task<(GameResultApiRequest?, Exception?)> GetGameResultAsync(CancellationToken ct = default)
+    public async Task<(GameResultApiResponse?, Exception?)> GetGameResultAsync(CancellationToken ct = default)
     {
         try
         {
             string requestData = await GetRequestAsync(GameClientApiRequestType.GameResult, ct).ConfigureAwait(false);
-            var gameResult = JsonSerializer.Deserialize<GameResultApiRequest?>(requestData);
+            var gameResult = JsonSerializer.Deserialize<GameResultApiResponse?>(requestData);
         
             return (gameResult, null);
         }

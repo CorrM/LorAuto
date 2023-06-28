@@ -4,20 +4,14 @@ using Emgu.CV.Structure;
 using LorAuto.Card;
 using LorAuto.Client;
 using LorAuto.Client.Model;
+using LorAuto.Extensions;
 using PInvoke;
-using Constants = LorAuto.GameState.Model.Constants;
+using Constants = LorAuto.Game.Model.Constants;
 using Image = System.Drawing.Image;
 using Point = System.Drawing.Point;
 using Size = System.Drawing.Size;
-using Range = Emgu.CV.Structure.Range;
 
-namespace LorAuto.GameState;
-
-public enum GameState
-{
-    None,
-    Menu,
-}
+namespace LorAuto.Game;
 
 /// <summary>
 /// Determines the game state and cards on board by using the LoR API and cv2 functionality
@@ -28,16 +22,28 @@ public sealed class StateMachine : IDisposable
     private readonly GameClientApi _gameClientApi;
     private readonly byte[][][] _manaMasks;
     private readonly int[] _numPxMask;
+    private readonly (double, double)[] _attackTokenBounds;
 
-    private bool _work; 
+    private bool _work;
     private bool _busy;
     
+    private int _nGames;
+    private int _prevGameID;
+    private bool _firstPassBlocking;
+    
+    private GameResultApiResponse? _gameResult;
+    private CardPositionsApiResponse? _gameData;
+
     public IntPtr GameWindowHandle { get; private set; }
-    public GameState GameState { get; private set; }
-    public bool GameIsForeground { get; private set; }
     public Point WindowLocation { get; private set; }
     public Size WindowSize { get; private set; }
-    
+    public bool GameIsForeground { get; private set; }
+    public int GamesWonCont { get; private set; }
+    public EGameState GameState { get; private set; }
+    public BoardState? CardsOnBoard { get; private set; }
+    public int Mana { get; private set; }
+    public int SpellMana { get; private set; }
+
     public StateMachine(CardSetsManager cardSetsManager, GameClientApi gameClientApi)
     {
         _cardSetsManager = cardSetsManager;
@@ -48,10 +54,11 @@ public sealed class StateMachine : IDisposable
             Constants.Five, Constants.Six, Constants.Seven, Constants.Eight, Constants.Nine, Constants.Ten
         };
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
+        _attackTokenBounds = new[] { (0.80, 0.6), (0.9, 0.78) };
 
-        User32.SetProcessDPIAware();
+        //User32.SetProcessDPIAware();
     }
-    
+
     private IntPtr GetWindowHandle()
     {
         IntPtr targetHandler = IntPtr.Zero;
@@ -87,16 +94,28 @@ public sealed class StateMachine : IDisposable
         return (loc, size);
     }
     
-    private GameState GetGameState()
-    {
-        return GameState.None;
-    }
-
     private bool GetGameIsForeground()
     {
         IntPtr hWindow = User32.GetForegroundWindow();
-        
         return hWindow == GameWindowHandle;
+    }
+    
+    private async Task<GameResultApiResponse?> GetGameResultAsync()
+    {
+        (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync().ConfigureAwait(false);
+        if (exception is not null || response is null)
+            return null;
+
+        return response;
+    }
+    
+    private async Task<CardPositionsApiResponse?> GetGameDataAsync()
+    {
+        (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
+        if (exception is not null || response is null)
+            return null;
+
+        return response;
     }
     
     private Image<Bgr, byte>[] GetFrames()
@@ -126,47 +145,81 @@ public sealed class StateMachine : IDisposable
         return frames;
     }
     
-    private void WorkLoop()
+    private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
-        _busy = true;
+        //if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
+        //    return GameState.Hold;
 
-        while (_work)
+        if (_gameResult is not null)
         {
-            GameWindowHandle = GetWindowHandle();
-            GameState = GetGameState();
-            (WindowLocation, WindowSize) = GetWindowRectInfo();
-            GameIsForeground = GetGameIsForeground();
+            if (_gameResult.GameID > _prevGameID)
+            {
+                if (_gameResult.LocalPlayerWon)
+                    GamesWonCont += 1;
+                
+                _nGames += 1;
+                _prevGameID = _gameResult.GameID;
+                _firstPassBlocking = false;
+                
+                return EGameState.End;
+            }
+        }
+
+        Image<Bgr, byte> lastFrame = frames.Last();
+        if (_gameData is null || _gameData.GameState == "Menus")
+        {
+            // TODO: Check for SearchGame here
+            //return EGameState.SearchGame;
             
-            Thread.Sleep(1000);
+            return EGameState.Menus;
         }
         
-        _busy = false;
-    }
-    
-    public bool Start()
-    {
-        if (_work)
-            return false;
-        _work = true;
+        // Mulligan check
+        // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
+        GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
+        if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
+            return EGameState.Mulligan;
         
-        new Thread(WorkLoop).Start();
-        return true;
-    }
+        if (CardsOnBoard.OpponentCardsAttack.Count > 0)
+            return EGameState.Blocking;
 
-    public void Stop()
-    {
-        _work = false;
+        // Check if it's our turn
+        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop((int)(WindowSize.Width * 0.77), (int)(WindowSize.Height * 0.42), (int)(WindowSize.Width * 0.93) - (int)(WindowSize.Width * 0.77), (int)(WindowSize.Height * 0.58) - (int)(WindowSize.Height * 0.42));
+        using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
+        using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
+        using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
+        using Image<Gray, byte>? btnTargetAndMask = targetAndMask.Convert<Gray, byte>();
 
-        while (_busy)
-            Thread.Sleep(8);
-    }
+        int numBluePx = CvInvoke.CountNonZero(btnTargetAndMask);
+        if (numBluePx < 100) // End turn button is GRAY
+            return EGameState.OpponentTurn;
 
-    public bool IsReady()
-    {
-        return GameWindowHandle != IntPtr.Zero;
+        // Check if local_player has the attack token
+        int attackTokenBoundLx = (int)(WindowSize.Width * _attackTokenBounds[0].Item1);
+        int attackTokenBoundLy = (int)(WindowSize.Height * _attackTokenBounds[0].Item2);
+        int attackTokenBoundRx = ((int)(WindowSize.Width * _attackTokenBounds[1].Item1)) - attackTokenBoundLx;
+        int attackTokenBoundRy = ((int)(WindowSize.Height * _attackTokenBounds[1].Item2)) - attackTokenBoundLy;
+        
+        foreach (Image<Bgr, byte> img in frames)
+        {
+            using Image<Bgr, byte> attackTokenSubImg = img.Crop(attackTokenBoundLx, attackTokenBoundLy, attackTokenBoundRx, attackTokenBoundRy);
+            using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
+            //using Image<Gray, byte>? attackTokenMask = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
+            using Image<Gray, byte>? attackTokenMask = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
+            using Image<Bgr, byte>? attackTokenTarget = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask);
+            using Image<Gray, byte>? attackTokenTargetGray = attackTokenTarget.Convert<Gray, byte>();
+
+            int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray);
+            if (numOrangePx <= 1000) // Not enough orange pixels for attack token
+                break;
+            
+            return EGameState.AttackTurn;
+        }
+
+        return EGameState.DefendTurn;
     }
     
-    public int GetMana(int maxRetry = 2)
+    private int GetMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
     {
         /*
          When attack and points are 3 maybe show as 1
@@ -182,15 +235,14 @@ public sealed class StateMachine : IDisposable
          calculates the sum of the edge values based on the mask, and checks if the average exceeds the threshold.
          The indices that satisfy the condition are added to the manaVals list.
          */
-        
+
         var manaVals = new List<(int Number, double Ratio)>();
         for (int retryCount = 0; retryCount < maxRetry; retryCount++)
         {
-            Image<Bgr, byte>[] frames = GetFrames();
             foreach (Image<Bgr, byte> frame in frames)
             {
-                using Image<Bgr, byte>? image = new Mat(frame.Mat, new Range(posY, posY + h), new Range(posX, posX + w)).ToImage<Bgr, byte>();
-    
+                using Image<Bgr, byte>? image = frame.Crop(posX, posY, w, h);
+
                 for (int i = 0; i < _manaMasks.Length; i++)
                 {
                     byte[][] mask = _manaMasks[i];
@@ -206,7 +258,7 @@ public sealed class StateMachine : IDisposable
                         {
                             if (mask[y][x] == 0)
                                 continue;
-                        
+
                             sum += grayImage.Data[y, x, 0];
                             count++;
                         }
@@ -225,10 +277,10 @@ public sealed class StateMachine : IDisposable
 
         return -1;
     }
-
-    public async Task<BoardState?> GetBoardState()
+    
+    private async Task<BoardState?> GetBoardStateAsync()
     {
-        (CardPositionsApiRequest? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
+        (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
             return null;
 
@@ -250,11 +302,12 @@ public sealed class StateMachine : IDisposable
             GameCard card = gameCardSet.Cards[cardCode];
             var inGameCard = new InGameCard(card, rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
 
+            boardState.AllCards.Add(inGameCard);
+
             int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
             float yRatio = (float)cardY / WindowSize.Height;
-            float cardRatio = (float)rectCard.Height / WindowSize.Height;
 
-            if (yRatio > 0.275f && cardRatio > .3f)
+            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardRatio((float)rectCard.Height / WindowSize.Height) > .3f
             {
                 boardState.CardsMulligan.Add(inGameCard);
                 continue;
@@ -294,7 +347,69 @@ public sealed class StateMachine : IDisposable
 
         return boardState;
     }
+    
+    private async Task WorkLoop()
+    {
+        _busy = true;
 
+        while (_work)
+        {
+            // Window
+            GameWindowHandle = GetWindowHandle();
+            (WindowLocation, WindowSize) = GetWindowRectInfo();
+            GameIsForeground = GetGameIsForeground();
+            
+            // Client API
+            _gameResult = await GetGameResultAsync().ConfigureAwait(false);
+            _gameData = await GetGameDataAsync().ConfigureAwait(false);
+            CardsOnBoard = await GetBoardStateAsync().ConfigureAwait(false); // Should be before 'GetGameState'
+            
+            // Game
+            Image<Bgr, byte>[] frames = GetFrames();
+            GameState = GetGameState(frames);
+            Mana = GetMana(frames);
+
+            // Clean
+            foreach (Image<Bgr,byte> frame in frames)
+                frame.Dispose();
+
+            if (GameState == EGameState.End)
+            {
+                Mana = 0;
+                SpellMana = 0;
+                // prev_mana = 0;
+                // turn = 0;
+            }
+            
+            Thread.Sleep(3000);
+        }
+
+        _busy = false;
+    }
+
+    public bool Start()
+    {
+        if (_work)
+            return false;
+        _work = true;
+
+        Task.Run(WorkLoop);
+        return true;
+    }
+
+    public void Stop()
+    {
+        _work = false;
+
+        while (_busy)
+            Thread.Sleep(8);
+    }
+
+    public bool IsReady()
+    {
+        return GameWindowHandle != IntPtr.Zero;
+    }
+    
     public void Dispose()
     {
         Stop();

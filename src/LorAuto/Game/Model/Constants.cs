@@ -1,4 +1,4 @@
-﻿namespace LorAuto.GameState.Model;
+﻿namespace LorAuto.Game.Model;
 
 public static class Constants
 {

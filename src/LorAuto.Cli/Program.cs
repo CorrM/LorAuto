@@ -1,13 +1,12 @@
-﻿using System.Diagnostics;
-using LorAuto;
+﻿using LorAuto;
 using LorAuto.Client;
-using LorAuto.GameState;
+using LorAuto.Game;
 using LorAuto.Strategies;
 
 var cardSetsManager = new CardSetsManager("CardSets");
 
 Console.Write("Downloading missing card sets ... ");
-await cardSetsManager.DownloadMissingCardSetsAsync().ConfigureAwait(false);
+//await cardSetsManager.DownloadMissingCardSetsAsync().ConfigureAwait(false);
 Console.WriteLine("Done");
 
 Console.Write("Load card sets ... ");
@@ -24,14 +23,12 @@ if (!targetHandle)
     return -1;
 }
 
-BoardState? cardsOnBoard = await stateMachine.GetBoardState().ConfigureAwait(false);
-if (cardsOnBoard is null)
-    throw new UnreachableException();
-
 while (!stateMachine.IsReady())
     Thread.Sleep(8);
 
-var bot = new Bot(stateMachine, gameClientApi, new Strategy());
-bot.SelectDeck(GameType.Eternal, true);
+var bot = new Bot(stateMachine, new Generic(), GameStyleType.Standard, false);
+
+while (true)
+    bot.Run();
 
 return 0;

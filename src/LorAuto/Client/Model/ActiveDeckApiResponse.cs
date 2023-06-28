@@ -8,7 +8,7 @@ public sealed class GameClientCardInDeck
 }
 
 [Serializable]
-public sealed class ActiveDeckApiResult
+public sealed class ActiveDeckApiResponse
 {
     public required string? DeckCode { get; init; }
     public required List<GameClientCardInDeck>? CardsInDeck { get; init; }
