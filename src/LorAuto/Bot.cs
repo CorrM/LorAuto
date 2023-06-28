@@ -18,6 +18,13 @@ public enum GameStyleType
 internal class BotCurrentGameState
 {
     public bool Mulligan { get; set; }
+    public bool FirstPassBlocking { get; set; }
+
+    public void Reset()
+    {
+        Mulligan = false;
+        FirstPassBlocking = false;
+    }
 }
 
 /// <summary>
@@ -72,6 +79,17 @@ public sealed class Bot
         
         Thread.Sleep(1000);
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
+    }
+
+    private void BlockCard(InGameCard card, InGameCard cardToBeBlocked)
+    {
+        (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y);
+        (int, int) posDest = (_stateMachine.WindowLocation.X + cardToBeBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - cardToBeBlocked.TopCenterPos.Y);
+
+        _input.Mouse.MoveMouseSmooth(posSrc.Item1, posSrc.Item2)
+            .LeftButtonDown()
+            .MoveMouseSmooth(posDest.Item1, posDest.Item2)
+            .LeftButtonUp();
     }
     
     private void SelectDeck(GameStyleType gameStyleType, bool isPvp)
@@ -138,8 +156,8 @@ public sealed class Bot
                 continue;
 
             int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-            int cy = _stateMachine.WindowLocation.Y + card.TopCenterPos.Y;
-            
+            int cy = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
+
             _input.Mouse.MoveMouseSmooth(cx, cy)
                 .LeftButtonClick();
             
@@ -147,6 +165,69 @@ public sealed class Bot
         }
 
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
+
+    }
+
+    private async Task BlockAsync(CancellationToken ct = default)
+    {
+        // Double check to avoid False Positives (card draw animation, card play animation...)
+        if (!_currentGameState.FirstPassBlocking)
+        {
+            _currentGameState.FirstPassBlocking = true;
+            Console.WriteLine("first blocking pass...");
+            await Task.Delay(5000, ct).ConfigureAwait(false);
+            return;
+        }
+
+        BoardState? boardState = _stateMachine.CardsOnBoard;
+        if (boardState is null)
+            throw new UnreachableException();
+
+        Dictionary<InGameCard, IEnumerable<InGameCard>?>? spellsToUse;
+        IEnumerable<InGameCard>? abilitiesToUse;
+        Dictionary<InGameCard,InGameCard> inGameCards = _strategy.Block(boardState, out spellsToUse, out abilitiesToUse);
+        
+        foreach ((InGameCard? myCard, InGameCard? opponentCard) in inGameCards)
+        {
+            if (opponentCard.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
+                continue;
+
+            if (opponentCard.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
+                continue;
+            
+            if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
+                continue;
+        
+            // TODO: boardState.CardsAttackOrBlock will always be empty
+            //       Because statue machine thread have no time to update
+            //       board state
+            
+            // Check if card is already blocked
+            bool isBlockable = true;
+            foreach (InGameCard allyCard in boardState.CardsAttackOrBlock)
+            {
+                if (Math.Abs(allyCard.TopCenterPos.X - opponentCard.TopCenterPos.X) >= 10)
+                    continue;
+                
+                isBlockable = false;
+                break;
+            }
+
+            if (!isBlockable)
+                continue;
+            
+            BlockCard(myCard, opponentCard);
+            
+            // Update state machine as cards rectangles will change after move
+            // card to block
+            await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
+
+            await Task.Delay(Random.Shared.Next(300, 600), ct).ConfigureAwait(false);
+
+        }
+
+        _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
+        await Task.Delay(10000, ct).ConfigureAwait(false);
     }
     
     private void GameEndContinueAndReplay()
@@ -165,8 +246,10 @@ public sealed class Bot
         Thread.Sleep(1000);
     }
     
-    public void Run()
+    public async Task ProcessAsync(CancellationToken ct = default)
     {
+        await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
+        
         switch (_stateMachine.GameState)
         {
             case EGameState.None:
@@ -187,6 +270,7 @@ public sealed class Bot
                 break;
             
             case EGameState.OpponentTurn:
+                await Task.Delay(3000, ct).ConfigureAwait(false);
                 break;
             
             case EGameState.DefendTurn:
@@ -199,6 +283,7 @@ public sealed class Bot
                 break;
             
             case EGameState.Blocking:
+                await BlockAsync(ct).ConfigureAwait(false);
                 break;
             
             case EGameState.RoundEnd:
@@ -208,6 +293,7 @@ public sealed class Bot
                 break;
             
             case EGameState.End:
+                _currentGameState.Reset();
                 GameEndContinueAndReplay();
                 break;
 

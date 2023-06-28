@@ -16,7 +16,7 @@ namespace LorAuto.Game;
 /// <summary>
 /// Determines the game state and cards on board by using the LoR API and cv2 functionality
 /// </summary>
-public sealed class StateMachine : IDisposable
+public sealed class StateMachine
 {
     private readonly CardSetsManager _cardSetsManager;
     private readonly GameClientApi _gameClientApi;
@@ -24,13 +24,9 @@ public sealed class StateMachine : IDisposable
     private readonly int[] _numPxMask;
     private readonly (double, double)[] _attackTokenBounds;
 
-    private bool _work;
-    private bool _busy;
-    
     private int _nGames;
     private int _prevGameID;
-    private bool _firstPassBlocking;
-    
+
     private GameResultApiResponse? _gameResult;
     private CardPositionsApiResponse? _gameData;
 
@@ -40,7 +36,7 @@ public sealed class StateMachine : IDisposable
     public bool GameIsForeground { get; private set; }
     public int GamesWonCont { get; private set; }
     public EGameState GameState { get; private set; }
-    public BoardState? CardsOnBoard { get; private set; }
+    public BoardState CardsOnBoard { get; private set; } // TODO: rename this property
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
@@ -56,6 +52,7 @@ public sealed class StateMachine : IDisposable
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
         _attackTokenBounds = new[] { (0.80, 0.6), (0.9, 0.78) };
 
+        CardsOnBoard = new BoardState();
         //User32.SetProcessDPIAware();
     }
 
@@ -93,13 +90,13 @@ public sealed class StateMachine : IDisposable
 
         return (loc, size);
     }
-    
+
     private bool GetGameIsForeground()
     {
         IntPtr hWindow = User32.GetForegroundWindow();
         return hWindow == GameWindowHandle;
     }
-    
+
     private async Task<GameResultApiResponse?> GetGameResultAsync()
     {
         (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync().ConfigureAwait(false);
@@ -108,7 +105,7 @@ public sealed class StateMachine : IDisposable
 
         return response;
     }
-    
+
     private async Task<CardPositionsApiResponse?> GetGameDataAsync()
     {
         (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
@@ -117,7 +114,7 @@ public sealed class StateMachine : IDisposable
 
         return response;
     }
-    
+
     private Image<Bgr, byte>[] GetFrames()
     {
         const int framesCount = 4;
@@ -144,7 +141,7 @@ public sealed class StateMachine : IDisposable
 
         return frames;
     }
-    
+
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
         //if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
@@ -156,11 +153,10 @@ public sealed class StateMachine : IDisposable
             {
                 if (_gameResult.LocalPlayerWon)
                     GamesWonCont += 1;
-                
+
                 _nGames += 1;
                 _prevGameID = _gameResult.GameID;
-                _firstPassBlocking = false;
-                
+
                 return EGameState.End;
             }
         }
@@ -170,17 +166,19 @@ public sealed class StateMachine : IDisposable
         {
             // TODO: Check for SearchGame here
             //return EGameState.SearchGame;
-            
+
             return EGameState.Menus;
         }
-        
+
         // Mulligan check
         // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
         GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
             return EGameState.Mulligan;
-        
-        if (CardsOnBoard.OpponentCardsAttack.Count > 0)
+
+        // TODO: Maybe need some more conditations as the python bot are using sleep a lot, so it just maybe thats why blocking state are accurate
+        //       Anyway ("Check if card is already blocked") check in `Bot::Block` method can handle it
+        if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
             return EGameState.Blocking;
 
         // Check if it's our turn
@@ -199,7 +197,7 @@ public sealed class StateMachine : IDisposable
         int attackTokenBoundLy = (int)(WindowSize.Height * _attackTokenBounds[0].Item2);
         int attackTokenBoundRx = ((int)(WindowSize.Width * _attackTokenBounds[1].Item1)) - attackTokenBoundLx;
         int attackTokenBoundRy = ((int)(WindowSize.Height * _attackTokenBounds[1].Item2)) - attackTokenBoundLy;
-        
+
         foreach (Image<Bgr, byte> img in frames)
         {
             using Image<Bgr, byte> attackTokenSubImg = img.Crop(attackTokenBoundLx, attackTokenBoundLy, attackTokenBoundRx, attackTokenBoundRy);
@@ -212,13 +210,13 @@ public sealed class StateMachine : IDisposable
             int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray);
             if (numOrangePx <= 1000) // Not enough orange pixels for attack token
                 break;
-            
+
             return EGameState.AttackTurn;
         }
 
         return EGameState.DefendTurn;
     }
-    
+
     private int GetMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
     {
         /*
@@ -277,14 +275,16 @@ public sealed class StateMachine : IDisposable
 
         return -1;
     }
-    
-    private async Task<BoardState?> GetBoardStateAsync()
+
+    private async Task UpdateBoardStateAsync()
     {
+        // Clear board state before update
+        CardsOnBoard.Clear();
+
         (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
-            return null;
+            return;
 
-        var boardState = new BoardState();
         foreach (GameClientRectangle rectCard in cardPositions.Rectangles)
         {
             string cardCode = rectCard.CardCode;
@@ -302,116 +302,77 @@ public sealed class StateMachine : IDisposable
             GameCard card = gameCardSet.Cards[cardCode];
             var inGameCard = new InGameCard(card, rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
 
-            boardState.AllCards.Add(inGameCard);
+            CardsOnBoard.AllCards.Add(inGameCard);
 
             int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
             float yRatio = (float)cardY / WindowSize.Height;
 
             if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardRatio((float)rectCard.Height / WindowSize.Height) > .3f
             {
-                boardState.CardsMulligan.Add(inGameCard);
+                CardsOnBoard.CardsMulligan.Add(inGameCard);
                 continue;
             }
 
             switch (yRatio)
             {
                 case > 0.97f:
-                    boardState.CardsHand.Add(inGameCard);
+                    CardsOnBoard.CardsHand.Add(inGameCard);
                     break;
 
                 case > 0.75f:
-                    boardState.CardsBoard.Add(inGameCard);
+                    CardsOnBoard.CardsBoard.Add(inGameCard);
                     break;
 
                 case > 0.6f:
-                    boardState.CardsAttack.Add(inGameCard);
+                    CardsOnBoard.CardsAttackOrBlock.Add(inGameCard);
                     break;
 
                 case > 0.45f:
-                    boardState.SpellStack.Add(inGameCard);
+                    CardsOnBoard.SpellStack.Add(inGameCard);
                     break;
 
                 case > 0.275f:
-                    boardState.OpponentCardsAttack.Add(inGameCard);
+                    CardsOnBoard.OpponentCardsAttackOrBlock.Add(inGameCard);
                     break;
 
                 case > 0.1f:
-                    boardState.OpponentCardsBoard.Add(inGameCard);
+                    CardsOnBoard.OpponentCardsBoard.Add(inGameCard);
                     break;
 
                 default:
-                    boardState.OpponentCardsHand.Add(inGameCard);
+                    CardsOnBoard.OpponentCardsHand.Add(inGameCard);
                     break;
             }
         }
-
-        return boardState;
     }
-    
-    private async Task WorkLoop()
-    {
-        _busy = true;
 
-        while (_work)
+    public async Task UpdateAsync(CancellationToken ct = default)
+    {
+        // Window
+        GameWindowHandle = GetWindowHandle();
+        (WindowLocation, WindowSize) = GetWindowRectInfo();
+        GameIsForeground = GetGameIsForeground();
+
+        // Client API
+        _gameResult = await GetGameResultAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        _gameData = await GetGameDataAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        await UpdateBoardStateAsync().ConfigureAwait(false); // must to be called before 'GetGameState'
+
+        // Game
+        Image<Bgr, byte>[] frames = GetFrames();
+        GameState = GetGameState(frames);
+        Mana = GetMana(frames);
+
+        // Clean
+        foreach (Image<Bgr, byte> frame in frames)
+            frame.Dispose();
+
+        if (GameState == EGameState.End)
         {
-            // Window
-            GameWindowHandle = GetWindowHandle();
-            (WindowLocation, WindowSize) = GetWindowRectInfo();
-            GameIsForeground = GetGameIsForeground();
-            
-            // Client API
-            _gameResult = await GetGameResultAsync().ConfigureAwait(false);
-            _gameData = await GetGameDataAsync().ConfigureAwait(false);
-            CardsOnBoard = await GetBoardStateAsync().ConfigureAwait(false); // Should be before 'GetGameState'
-            
-            // Game
-            Image<Bgr, byte>[] frames = GetFrames();
-            GameState = GetGameState(frames);
-            Mana = GetMana(frames);
-
-            // Clean
-            foreach (Image<Bgr,byte> frame in frames)
-                frame.Dispose();
-
-            if (GameState == EGameState.End)
-            {
-                Mana = 0;
-                SpellMana = 0;
-                // prev_mana = 0;
-                // turn = 0;
-            }
-            
-            Thread.Sleep(3000);
+            Mana = 0;
+            SpellMana = 0;
+            // prev_mana = 0;
+            // turn = 0;
         }
-
-        _busy = false;
-    }
-
-    public bool Start()
-    {
-        if (_work)
-            return false;
-        _work = true;
-
-        Task.Run(WorkLoop);
-        return true;
-    }
-
-    public void Stop()
-    {
-        _work = false;
-
-        while (_busy)
-            Thread.Sleep(8);
-    }
-
-    public bool IsReady()
-    {
-        return GameWindowHandle != IntPtr.Zero;
-    }
-    
-    public void Dispose()
-    {
-        Stop();
     }
 }

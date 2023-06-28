@@ -1,4 +1,6 @@
-﻿import cv2
+﻿# Copyright https://stackoverflow.com/a/59906154/3351489
+
+import cv2
 import numpy as np
 
 def nothing(x):

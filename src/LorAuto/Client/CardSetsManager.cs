@@ -85,7 +85,7 @@ public sealed class CardSetsManager
                 Attack = cardJson["attack"]!.GetValue<int>(),
                 Health = cardJson["health"]!.GetValue<int>(),
                 Type = Enum.Parse<GameCardType>(cardJson["type"]!.GetValue<string>()),
-                Keywords = cardJson["keywordRefs"]!.AsArray().Select(j => j!.GetValue<string>()).ToArray(),
+                Keywords = cardJson["keywordRefs"]!.AsArray().Select(j => Enum.Parse<GameCardKeyword>(j!.GetValue<string>())).ToArray(),
                 Description = cardJson["descriptionRaw"]!.GetValue<string>(),
             };
             cardsInSet.Add(gameCard.CardCode, gameCard);
@@ -184,7 +184,7 @@ public sealed class CardSetsManager
         // Clear old data
         CardSetsLoaded = false;
         CardSets.Clear();
-
+        
         // Load card sets
         foreach (string cardSetName in GetExistsCardSetsNames())
         {
