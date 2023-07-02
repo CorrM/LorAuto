@@ -1,13 +1,12 @@
-﻿using System.Drawing;
-using System.Reflection;
+﻿using System.Reflection;
 using Point = System.Drawing.Point;
 
-namespace LorAuto.Card;
+namespace LorAuto.Card.Model;
 
 [Serializable]
 public sealed class InGameCard : GameCard
 {
-    public Point TopCenterPos { get; }
+    public Point TopCenterPos { get; init; }
     public bool IsLocalPlayer { get; init; }
 
     public InGameCard(GameCard otherCard, int x, int y, int w, int h, bool isLocalPlayer)

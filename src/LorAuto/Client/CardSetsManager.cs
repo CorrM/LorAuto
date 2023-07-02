@@ -2,7 +2,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using LorAuto.Card;
+using LorAuto.Card.Model;
 
 namespace LorAuto.Client;
 

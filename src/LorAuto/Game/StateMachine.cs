@@ -1,7 +1,7 @@
 ﻿using System.Drawing;
 using Emgu.CV;
 using Emgu.CV.Structure;
-using LorAuto.Card;
+using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
@@ -36,7 +36,7 @@ public sealed class StateMachine
     public bool GameIsForeground { get; private set; }
     public int GamesWonCont { get; private set; }
     public EGameState GameState { get; private set; }
-    public BoardState CardsOnBoard { get; private set; } // TODO: rename this property
+    public BoardCards CardsOnBoard { get; private set; }
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
@@ -52,7 +52,7 @@ public sealed class StateMachine
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
         _attackTokenBounds = new[] { (0.80, 0.6), (0.9, 0.78) };
 
-        CardsOnBoard = new BoardState();
+        CardsOnBoard = new BoardCards();
         //User32.SetProcessDPIAware();
     }
 
@@ -144,6 +144,7 @@ public sealed class StateMachine
 
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
+        // TODO: Give user control to pause bot
         //if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
         //    return GameState.Hold;
 
@@ -176,7 +177,7 @@ public sealed class StateMachine
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
             return EGameState.Mulligan;
 
-        // TODO: Maybe need some more conditations as the python bot are using sleep a lot, so it just maybe thats why blocking state are accurate
+        // TODO: Maybe need some more conditions as the python bot are using sleep a lot, so it just maybe thats why blocking state are accurate
         //       Anyway ("Check if card is already blocked") check in `Bot::Block` method can handle it
         if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
             return EGameState.Blocking;
@@ -198,20 +199,26 @@ public sealed class StateMachine
         int attackTokenBoundRx = ((int)(WindowSize.Width * _attackTokenBounds[1].Item1)) - attackTokenBoundLx;
         int attackTokenBoundRy = ((int)(WindowSize.Height * _attackTokenBounds[1].Item2)) - attackTokenBoundLy;
 
-        foreach (Image<Bgr, byte> img in frames)
+        //foreach (Image<Bgr, byte> img in frames)
         {
-            using Image<Bgr, byte> attackTokenSubImg = img.Crop(attackTokenBoundLx, attackTokenBoundLy, attackTokenBoundRx, attackTokenBoundRy);
+            using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackTokenBoundLx, attackTokenBoundLy, attackTokenBoundRx, attackTokenBoundRy);
             using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
-            //using Image<Gray, byte>? attackTokenMask = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
-            using Image<Gray, byte>? attackTokenMask = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
-            using Image<Bgr, byte>? attackTokenTarget = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask);
-            using Image<Gray, byte>? attackTokenTargetGray = attackTokenTarget.Convert<Gray, byte>();
 
-            int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray);
-            if (numOrangePx <= 1000) // Not enough orange pixels for attack token
-                break;
+            using Image<Gray, byte>? attackTokenMask1 = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
+            using Image<Bgr, byte>? attackTokenTarget1 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask1);
+            using Image<Gray, byte>? attackTokenTargetGray1 = attackTokenTarget1.Convert<Gray, byte>();
 
-            return EGameState.AttackTurn;
+            int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+            if (numOrangePx > 1000) // Not enough orange pixels for attack token
+                return EGameState.AttackTurn;
+
+            using Image<Gray, byte>? attackTokenMask2 = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
+            using Image<Bgr, byte>? attackTokenTarget2 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask2);
+            using Image<Gray, byte>? attackTokenTargetGray2 = attackTokenTarget2.Convert<Gray, byte>();
+
+            numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+            if (numOrangePx > 1000) // Not enough orange pixels for attack token
+                return EGameState.AttackTurn;
         }
 
         return EGameState.DefendTurn;
@@ -239,7 +246,7 @@ public sealed class StateMachine
         {
             foreach (Image<Bgr, byte> frame in frames)
             {
-                using Image<Bgr, byte>? image = frame.Crop(posX, posY, w, h);
+                using Image<Bgr, byte> image = frame.Crop(posX, posY, w, h);
 
                 for (int i = 0; i < _manaMasks.Length; i++)
                 {
@@ -275,12 +282,16 @@ public sealed class StateMachine
 
         return -1;
     }
-
-    private async Task UpdateBoardStateAsync()
+    
+    private async Task UpdateCardsOnBoardAsync()
     {
+        // Store cards references so we can update the card data but in same card instance
+        List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
+        
         // Clear board state before update
         CardsOnBoard.Clear();
 
+        // NOTE: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
         (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
             return;
@@ -299,8 +310,13 @@ public sealed class StateMachine
                 continue;
             }
 
-            GameCard card = gameCardSet.Cards[cardCode];
-            var inGameCard = new InGameCard(card, rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
+            var inGameCard = new InGameCard(gameCardSet.Cards[cardCode], rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
+            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c == inGameCard);
+            if (toUpdate is not null)
+            {
+                toUpdate.Update(inGameCard);
+                inGameCard = toUpdate;
+            }
 
             CardsOnBoard.AllCards.Add(inGameCard);
 
@@ -345,18 +361,23 @@ public sealed class StateMachine
             }
         }
     }
-
-    public async Task UpdateAsync(CancellationToken ct = default)
+    
+    public void UpdateClientInfo()
     {
-        // Window
         GameWindowHandle = GetWindowHandle();
         (WindowLocation, WindowSize) = GetWindowRectInfo();
         GameIsForeground = GetGameIsForeground();
-
+    }
+    
+    public async Task UpdateGameDataAsync(CancellationToken ct = default)
+    {
+        if (GameWindowHandle == IntPtr.Zero)
+            throw new Exception($"'{nameof(UpdateClientInfo)}' must to be called at least once before calling this function.");
+        
         // Client API
         _gameResult = await GetGameResultAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         _gameData = await GetGameDataAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
-        await UpdateBoardStateAsync().ConfigureAwait(false); // must to be called before 'GetGameState'
+        await UpdateCardsOnBoardAsync().ConfigureAwait(false); // must to be called before 'GetGameState'
 
         // Game
         Image<Bgr, byte>[] frames = GetFrames();
@@ -367,12 +388,12 @@ public sealed class StateMachine
         foreach (Image<Bgr, byte> frame in frames)
             frame.Dispose();
 
-        if (GameState == EGameState.End)
-        {
-            Mana = 0;
-            SpellMana = 0;
-            // prev_mana = 0;
-            // turn = 0;
-        }
+        if (GameState != EGameState.End)
+            return;
+
+        Mana = 0;
+        SpellMana = 0;
+        // prev_mana = 0;
+        // turn = 0;
     }
 }

@@ -1,15 +1,13 @@
 ﻿using System.Diagnostics;
-using GregsStack.InputSimulatorStandard;
-using GregsStack.InputSimulatorStandard.Native;
-using LorAuto.Card;
+using LorAuto.Card.Model;
 using LorAuto.Client.Model;
-using LorAuto.Extensions;
 using LorAuto.Game;
 using LorAuto.Strategies;
+using LorAuto.Strategies.Model;
 
 namespace LorAuto;
 
-public enum GameStyleType
+public enum GameRotationType
 {
     Standard,
     Eternal
@@ -34,108 +32,22 @@ public sealed class Bot
 {
     private readonly StateMachine _stateMachine;
     private readonly Strategy _strategy;
-    private readonly GameStyleType _gameStyleType;
+    private readonly GameRotationType _gameRotationType;
     private readonly bool _isPvp;
-    private readonly InputSimulator _input;
-
     private readonly BotCurrentGameState _currentGameState;
-    private readonly (double, double)[] _selectDeckAi;
-    private readonly (double, double)[] _selectDeckPvp;
-    
-    public Bot(StateMachine stateMachine, Strategy strategy, GameStyleType gameStyleType, bool isPvp)
+    private readonly UserSimulator _userSimulator;
+
+    public Bot(StateMachine stateMachine, Strategy strategy, GameRotationType gameRotationType, bool isPvp)
     {
         _stateMachine = stateMachine;
         _strategy = strategy;
-        _gameStyleType = gameStyleType;
+        _gameRotationType = gameRotationType;
         _isPvp = isPvp;
-        _input = new InputSimulator();
 
         _currentGameState = new BotCurrentGameState();
-        _selectDeckAi = new (double, double)[] { (0.04721, 0.33454), (0.15738, 0.33401), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538) };
-        _selectDeckPvp = new (double, double)[] { (0.04721, 0.33454), (0.15738, 0.25), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538) };
-    }
-    
-    private void PlayCard(InGameCard card)
-    {
-        int x = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
-    
-        _input.Mouse.MoveMouseSmooth(x, y);
-        Thread.Sleep(500); // Wait for the card maximize animation
-    
-        _input.Mouse.MoveMouseSmooth(x, y)
-            .LeftButtonDown();
-    
-        int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
-        _input.Mouse.MoveMouseSmooth(x, newY);
-        Thread.Sleep(300);
-    
-        _input.Mouse.MoveMouseSmooth(x, newY)
-            .LeftButtonUp();
-        
-        Thread.Sleep(300);
-        if (card.Type != GameCardType.Spell)
-            return;
-        
-        Thread.Sleep(1000);
-        _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
+        _userSimulator = new UserSimulator(_stateMachine);
     }
 
-    private void BlockCard(InGameCard card, InGameCard cardToBeBlocked)
-    {
-        (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y);
-        (int, int) posDest = (_stateMachine.WindowLocation.X + cardToBeBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - cardToBeBlocked.TopCenterPos.Y);
-
-        _input.Mouse.MoveMouseSmooth(posSrc.Item1, posSrc.Item2)
-            .LeftButtonDown()
-            .MoveMouseSmooth(posDest.Item1, posDest.Item2)
-            .LeftButtonUp();
-    }
-    
-    private void SelectDeck(GameStyleType gameStyleType, bool isPvp)
-    {
-        (double, double) gameTypePos = gameStyleType switch
-        {
-            GameStyleType.Standard => (0.70989, 0.05),
-            GameStyleType.Eternal => (0.81970, 0.05),
-            _ => throw new UnreachableException()
-        };
-        
-        foreach ((double xRatio, double yRatio) in isPvp ? _selectDeckPvp : _selectDeckAi)
-        {
-            double xr;
-            double yr;
-            
-            if (xRatio == 0 && yRatio == 0 && isPvp)
-            {
-                xr = gameTypePos.Item1;
-                yr = gameTypePos.Item2;
-            }
-            else if (xRatio == 0 && yRatio == 0)
-            {
-                // vs AI there is not Standard or Eternal
-                continue;
-            }
-            else
-            {
-                xr = xRatio;
-                yr = yRatio;
-            }
-            
-            (double x, double y) = (_stateMachine.WindowLocation.X + (xr * _stateMachine.WindowSize.Width), _stateMachine.WindowLocation.Y + (yr * _stateMachine.WindowSize.Height));
-            _input.Mouse.MoveMouseSmooth(x, y)
-                .LeftButtonClick()
-                .Sleep(Random.Shared.Next(700, 1000));
-        }
-        
-        Thread.Sleep(1000);
-        
-        // Handle "Matchmaking has failed" error
-        (double, double) okButtonPos = (_stateMachine.WindowLocation.X + 0.5 * _stateMachine.WindowSize.Width, _stateMachine.WindowLocation.Y + 0.546 * _stateMachine.WindowSize.Height);
-        _input.Mouse.MoveMouseSmooth((int)okButtonPos.Item1, (int)okButtonPos.Item2)
-            .LeftButtonClick();
-    }
-    
     private void Mulligan()
     {
         if (_currentGameState.Mulligan)
@@ -144,8 +56,8 @@ public sealed class Bot
 
         // Wait before do any action
         Thread.Sleep(Random.Shared.Next(6000, 10000));
-        
-        BoardState? boardState = _stateMachine.CardsOnBoard;
+
+        BoardCards? boardState = _stateMachine.CardsOnBoard;
         if (boardState is null)
             throw new UnreachableException();
 
@@ -155,17 +67,12 @@ public sealed class Bot
             if (!boardState.CardsMulligan.Contains(card))
                 continue;
 
-            int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-            int cy = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
+            _userSimulator.ClickCard(card);
 
-            _input.Mouse.MoveMouseSmooth(cx, cy)
-                .LeftButtonClick();
-            
             Thread.Sleep(Random.Shared.Next(300, 600));
         }
 
-        _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
-
+        _userSimulator.CommitOrPassOrSkipTurn();
     }
 
     private async Task BlockAsync(CancellationToken ct = default)
@@ -175,132 +82,252 @@ public sealed class Bot
         {
             _currentGameState.FirstPassBlocking = true;
             Console.WriteLine("first blocking pass...");
-            await Task.Delay(5000, ct).ConfigureAwait(false);
+            await Task.Delay(6000, ct).ConfigureAwait(false);
             return;
         }
 
-        BoardState? boardState = _stateMachine.CardsOnBoard;
-        if (boardState is null)
-            throw new UnreachableException();
-
         Dictionary<InGameCard, IEnumerable<InGameCard>?>? spellsToUse;
         IEnumerable<InGameCard>? abilitiesToUse;
-        Dictionary<InGameCard,InGameCard> inGameCards = _strategy.Block(boardState, out spellsToUse, out abilitiesToUse);
-        
-        foreach ((InGameCard? myCard, InGameCard? opponentCard) in inGameCards)
-        {
-            if (opponentCard.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
-                continue;
+        Dictionary<InGameCard, InGameCard> blockCards = _strategy.Block(_stateMachine.CardsOnBoard, out spellsToUse, out abilitiesToUse);
 
-            if (opponentCard.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
-                continue;
-            
-            if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
-                continue;
+        // TODO: blockCards will be not valid after just one card change, because other cards date are now old as 'blockCards' cards
+        //       Are totally different than cards in '_stateMachine.CardsOnBoard' so mostly mouse cord will be wrong
         
-            // TODO: boardState.CardsAttackOrBlock will always be empty
-            //       Because statue machine thread have no time to update
-            //       board state
-            
+        foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
+        {
             // Check if card is already blocked
             bool isBlockable = true;
-            foreach (InGameCard allyCard in boardState.CardsAttackOrBlock)
+            foreach (InGameCard allyCard in _stateMachine.CardsOnBoard.CardsAttackOrBlock)
             {
                 if (Math.Abs(allyCard.TopCenterPos.X - opponentCard.TopCenterPos.X) >= 10)
                     continue;
-                
+
                 isBlockable = false;
                 break;
             }
 
             if (!isBlockable)
                 continue;
-            
-            BlockCard(myCard, opponentCard);
-            
+
+            _userSimulator.BlockCard(myCard, opponentCard);
+
             // Update state machine as cards rectangles will change after move
             // card to block
-            await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
             await Task.Delay(Random.Shared.Next(300, 600), ct).ConfigureAwait(false);
-
         }
 
-        _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
+        _userSimulator.CommitOrPassOrSkipTurn();
         await Task.Delay(10000, ct).ConfigureAwait(false);
     }
-    
-    private void GameEndContinueAndReplay()
+
+    private async Task<bool> PlayCardsFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
     {
-        Thread.Sleep(4000);
-        double continueBtnPosX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.66);
-        double continueBtnPosY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.90);
-        
-        for (int i = 0; i < 16; i++)
+        // Play cards from hand
+        if (playableCards.Count == 0)
         {
-            _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY)
-                .LeftButtonClick();
-            Thread.Sleep(1500);
+            // Update cards
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+            return false;
         }
         
-        Thread.Sleep(1000);
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false); // Update cards positions
+
+        (InGameCard HandCard, List<InGameCard?>? Targets)? playHandCard = _strategy.PlayHandCard(
+            _stateMachine.CardsOnBoard,
+            _stateMachine.GameState,
+            _stateMachine.Mana,
+            _stateMachine.SpellMana,
+            playableCards);
+        
+        if (playHandCard is null)
+            return false;
+
+        // TODO: use playHandCard.Targets
+        _userSimulator.PlayCard(playHandCard.Value.HandCard);
+
+        //// its owner refills 1 spell mana
+        //if (handCard.Keywords.Contains(GameCardKeyword.Attune))
+        //    this.spellMana = Math.Min(3, this.spellMana + 1);
+
+        //// Calculate spell mana if necessary
+        //if (handCard.Type == GameCardType.Spell)
+        //    this.spellMana = Math.Max(0, this.spellMana - handCard.Cost);
+
+        //// Get new mana
+        //await Task.Delay(1250, ct).ConfigureAwait(false);
+        //while (true)
+        //{
+        //    await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
+
+        //    if (_stateMachine.Mana != -1)
+        //        break;
+        //}
+
+        //this.prevMana = this.mana;
+
+        await Task.Delay(4000, ct).ConfigureAwait(false);
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
+        return true;
     }
-    
+
+    private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
+    {
+        // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
+        if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is GameCardType.Spell or GameCardType.Ability))
+        {
+            // Double check to avoid False Positives
+            if (!_currentGameState.FirstPassBlocking)
+            {
+                _currentGameState.FirstPassBlocking = true;
+                Console.WriteLine("first spell pass...");
+                Thread.Sleep(6000);
+                return true;
+            }
+
+            _userSimulator.CommitOrPassOrSkipTurn();
+            await Task.Delay(4000, ct).ConfigureAwait(false);
+            return true;
+        }
+
+        // Update game data
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+        
+        // Determinate what to do with attack token
+        EGamePlayAction gamePlayAction = gameState == EGameState.DefendTurn
+            ? _strategy.RespondToOpponentAction(_stateMachine.CardsOnBoard, _stateMachine.GameState, _stateMachine.Mana, _stateMachine.SpellMana)
+            : _strategy.AttackTokenUsage(_stateMachine.CardsOnBoard, _stateMachine.Mana, _stateMachine.SpellMana);
+        if (gamePlayAction == EGamePlayAction.Skip)
+        {
+            _userSimulator.CommitOrPassOrSkipTurn();
+            await Task.Delay(4000, ct).ConfigureAwait(false);
+            return true;
+        }
+
+        List<InGameCard> playableCards = _stateMachine.CardsOnBoard.CardsHand
+            .Where(card => card.Cost <= _stateMachine.Mana || (card.Type == GameCardType.Spell && card.Cost <= _stateMachine.Mana + _stateMachine.SpellMana))
+            .OrderByDescending(card => card.Cost)
+            .ToList();
+
+        // Play cards from hand
+        if (playableCards.Count <= 0 || gamePlayAction != EGamePlayAction.PlayCards)
+            return true;
+        
+        bool thereCardPlayed = await PlayCardsFromHandAsync(playableCards, ct).ConfigureAwait(false);
+        if (!thereCardPlayed)
+            return true;
+
+        await Task.Delay(4000, ct).ConfigureAwait(false);
+        
+        // Update cards
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+        
+        return false;
+    }
+
+    private async Task DefendAsync(CancellationToken ct = default)
+    {
+        bool actionHandled = await PreDefendOrAttackAsync(EGameState.DefendTurn, ct).ConfigureAwait(false);
+        if (actionHandled)
+            return;
+        
+        // Any other 'gamePlayAction' or there is no playable cards
+        _userSimulator.CommitOrPassOrSkipTurn();
+
+        await Task.Delay(Random.Shared.Next(1000, 4000), ct).ConfigureAwait(false);
+    }
+
+    private async Task AttackAsync(CancellationToken ct = default)
+    {
+        bool actionHandled = await PreDefendOrAttackAsync(EGameState.Attacking, ct).ConfigureAwait(false);
+        if (actionHandled)
+            return;
+
+        // Attack
+        List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
+        // TODO: cardsToAttack will be not valid after just one card change, because other cards date are now old as 'cardsToAttack' cards
+        //       Are totally different than cards in '_stateMachine.CardsOnBoard' so mostly mouse cord will be wrong
+        
+        foreach (InGameCard atkCard in cardsToAttack)
+        {
+            _userSimulator.PlayCard(atkCard);
+
+            // Update cards
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
+            await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
+        }
+
+        // Wait for any card effect
+        await Task.Delay(1000, ct).ConfigureAwait(false);
+
+        // Submit attack
+        _userSimulator.CommitOrPassOrSkipTurn();
+        await Task.Delay(4000, ct).ConfigureAwait(false);
+    }
+
     public async Task ProcessAsync(CancellationToken ct = default)
     {
-        await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
-        
+        // TODO: When attack then opponent set the block cards then you have spell cards
+        //       That will make '_stateMachine.GameState' ==  'EGameState.Blocking'
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
         switch (_stateMachine.GameState)
         {
             case EGameState.None:
                 return;
-            
+
             case EGameState.Hold:
                 break;
-            
+
             case EGameState.Menus:
-                SelectDeck(_gameStyleType, _isPvp);
+                _userSimulator.SelectDeck(_gameRotationType, _isPvp);
+                // TODO: Add a way to detect 'EGameState.SearchGame' so this statement doesnt get called more than once
                 break;
 
             case EGameState.SearchGame:
                 break;
-            
+
             case EGameState.Mulligan:
                 Mulligan();
                 break;
-            
+
             case EGameState.OpponentTurn:
                 await Task.Delay(3000, ct).ConfigureAwait(false);
                 break;
-            
+
             case EGameState.DefendTurn:
+                await DefendAsync(ct).ConfigureAwait(false);
                 break;
-            
+
             case EGameState.AttackTurn:
+                await AttackAsync(ct).ConfigureAwait(false);
                 break;
-            
+
             case EGameState.Attacking:
                 break;
-            
+
             case EGameState.Blocking:
                 await BlockAsync(ct).ConfigureAwait(false);
                 break;
-            
+
             case EGameState.RoundEnd:
                 break;
-            
+
             case EGameState.Pass:
                 break;
-            
+
             case EGameState.End:
                 _currentGameState.Reset();
-                GameEndContinueAndReplay();
+                _userSimulator.GameEndContinueAndReplay();
                 break;
 
             default:
                 throw new ArgumentOutOfRangeException();
         }
-        
+
         // Move mouse to center after each play 
         //int mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width / 2);
         //int mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height / 2);

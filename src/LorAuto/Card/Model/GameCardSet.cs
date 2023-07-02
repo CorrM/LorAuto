@@ -1,4 +1,4 @@
-﻿namespace LorAuto.Card;
+﻿namespace LorAuto.Card.Model;
 
 public sealed class GameCardSet
 {

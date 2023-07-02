@@ -18,14 +18,15 @@ Console.WriteLine("Done");
 using var gameClientApi = new GameClientApi();
 var stateMachine = new StateMachine(cardSetsManager, gameClientApi);
 
-await stateMachine.UpdateAsync().ConfigureAwait(false);
+stateMachine.UpdateClientInfo();
+await stateMachine.UpdateGameDataAsync().ConfigureAwait(false);
 if (stateMachine.GameWindowHandle == IntPtr.Zero)
 {
     Console.WriteLine("Legends of Runeterra isn't running!");
     return -1;
 }
 
-var bot = new Bot(stateMachine, new Generic(), GameStyleType.Standard, false);
+var bot = new Bot(stateMachine, new Generic(), GameRotationType.Standard, false);
 
 while (true)
     await bot.ProcessAsync().ConfigureAwait(false);
