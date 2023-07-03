@@ -91,10 +91,6 @@ public sealed class Bot
         Dictionary<InGameCard, IEnumerable<InGameCard>?>? spellsToUse;
         IEnumerable<InGameCard>? abilitiesToUse;
         Dictionary<InGameCard, InGameCard> blockCards = _strategy.Block(_stateMachine.CardsOnBoard, out spellsToUse, out abilitiesToUse);
-
-        // TODO: blockCards will be not valid after just one card change, because other cards date are now old as 'blockCards' cards
-        //       Are totally different than cards in '_stateMachine.CardsOnBoard' so mostly mouse cord will be wrong
-        
         foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
         {
             // Update before block
@@ -261,15 +257,12 @@ public sealed class Bot
 
         // Attack
         List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
-        // TODO: cardsToAttack will be not valid after just one card change, because other cards date are now old as 'cardsToAttack' cards
-        //       Are totally different than cards in '_stateMachine.CardsOnBoard' so mostly mouse cord will be wrong
-        
         foreach (InGameCard atkCard in cardsToAttack)
         {
-            _userSimulator.PlayCard(atkCard);
-
             // Update cards
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+            
+            _userSimulator.PlayCard(atkCard);
 
             await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
         }
@@ -280,12 +273,15 @@ public sealed class Bot
         // Submit attack
         _userSimulator.CommitOrPassOrSkipTurn();
         await Task.Delay(4000, ct).ConfigureAwait(false);
+        
+        // Update cards
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
     }
 
     public async Task ProcessAsync(CancellationToken ct = default)
     {
-        // TODO: When attack then opponent set the block cards then you have spell cards
-        //       That will make '_stateMachine.GameState' ==  'EGameState.Blocking'
+        // TODO: When attack then opponent set block cards then you have spell cards
+        //       That will count as '_stateMachine.GameState' == 'EGameState.Blocking'
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
         switch (_stateMachine.GameState)
