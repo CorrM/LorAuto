@@ -22,7 +22,6 @@ public sealed class StateMachine
     private readonly GameClientApi _gameClientApi;
     private readonly byte[][][] _manaMasks;
     private readonly int[] _numPxMask;
-    private readonly (double, double)[] _attackTokenBounds;
 
     private int _nGames;
     private int _prevGameID;
@@ -34,6 +33,7 @@ public sealed class StateMachine
     public Point WindowLocation { get; private set; }
     public Size WindowSize { get; private set; }
     public bool GameIsForeground { get; private set; }
+    public GameComponentLocator ComponentLocator { get; private set; }
     public int GamesWonCont { get; private set; }
     public EGameState GameState { get; private set; }
     public BoardCards CardsOnBoard { get; private set; }
@@ -50,8 +50,8 @@ public sealed class StateMachine
             Constants.Five, Constants.Six, Constants.Seven, Constants.Eight, Constants.Nine, Constants.Ten
         };
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
-        _attackTokenBounds = new[] { (0.80, 0.6), (0.9, 0.78) };
 
+        ComponentLocator = new GameComponentLocator(this);
         CardsOnBoard = new BoardCards();
         //User32.SetProcessDPIAware();
     }
@@ -120,7 +120,7 @@ public sealed class StateMachine
         const int framesCount = 4;
         (Point loc, Size size) = GetWindowRectInfo();
         var frames = new Image<Bgr, byte>[framesCount];
-        
+
         using User32.SafeDCHandle hdcScreen = User32.GetDC(IntPtr.Zero);
         using User32.SafeDCHandle hdc = Gdi32.CreateCompatibleDC(hdcScreen);
 
@@ -194,32 +194,26 @@ public sealed class StateMachine
             return EGameState.OpponentTurn;
 
         // Check if local_player has the attack token
-        int attackTokenBoundLx = (int)(WindowSize.Width * _attackTokenBounds[0].Item1);
-        int attackTokenBoundLy = (int)(WindowSize.Height * _attackTokenBounds[0].Item2);
-        int attackTokenBoundRx = ((int)(WindowSize.Width * _attackTokenBounds[1].Item1)) - attackTokenBoundLx;
-        int attackTokenBoundRy = ((int)(WindowSize.Height * _attackTokenBounds[1].Item2)) - attackTokenBoundLy;
+        (Point l, Point r) = ComponentLocator.GetAttackTokenBound();
 
-        //foreach (Image<Bgr, byte> img in frames)
-        {
-            using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackTokenBoundLx, attackTokenBoundLy, attackTokenBoundRx, attackTokenBoundRy);
-            using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
+        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(l.X, l.Y, r.X, r.Y);
+        using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
 
-            using Image<Gray, byte>? attackTokenMask1 = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
-            using Image<Bgr, byte>? attackTokenTarget1 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask1);
-            using Image<Gray, byte>? attackTokenTargetGray1 = attackTokenTarget1.Convert<Gray, byte>();
+        using Image<Gray, byte>? attackTokenMask1 = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
+        using Image<Bgr, byte>? attackTokenTarget1 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask1);
+        using Image<Gray, byte>? attackTokenTargetGray1 = attackTokenTarget1.Convert<Gray, byte>();
 
-            int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
-            if (numOrangePx > 1000) // Not enough orange pixels for attack token
-                return EGameState.AttackTurn;
+        int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+        if (numOrangePx > 1000) // Not enough orange pixels for attack token
+            return EGameState.AttackTurn;
 
-            using Image<Gray, byte>? attackTokenMask2 = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
-            using Image<Bgr, byte>? attackTokenTarget2 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask2);
-            using Image<Gray, byte>? attackTokenTargetGray2 = attackTokenTarget2.Convert<Gray, byte>();
+        using Image<Gray, byte>? attackTokenMask2 = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
+        using Image<Bgr, byte>? attackTokenTarget2 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask2);
+        using Image<Gray, byte>? attackTokenTargetGray2 = attackTokenTarget2.Convert<Gray, byte>();
 
-            numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
-            if (numOrangePx > 1000) // Not enough orange pixels for attack token
-                return EGameState.AttackTurn;
-        }
+        numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+        if (numOrangePx > 1000) // Not enough orange pixels for attack token
+            return EGameState.AttackTurn;
 
         return EGameState.DefendTurn;
     }
@@ -227,27 +221,20 @@ public sealed class StateMachine
     private int GetMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
     {
         /*
-         When attack and points are 3 maybe show as 1
-         6 Doesnt work
-         */
-        int posX = WindowSize.Width - (int)(WindowSize.Width / 5.73134f); // 1585
-        int posY = WindowSize.Height - (int)(WindowSize.Height / 2.4434f); // 638
-        const int w = 50;
-        const int h = 37;
-
-        /*
          This code iterates over the frames list and MANA_MASKS array,
          calculates the sum of the edge values based on the mask, and checks if the average exceeds the threshold.
          The indices that satisfy the condition are added to the manaVals list.
          */
+
+        Rectangle manaRect = ComponentLocator.GetManaRect();
 
         var manaVals = new List<(int Number, double Ratio)>();
         for (int retryCount = 0; retryCount < maxRetry; retryCount++)
         {
             foreach (Image<Bgr, byte> frame in frames)
             {
-                using Image<Bgr, byte> image = frame.Crop(posX, posY, w, h);
-
+                using Image<Bgr, byte> image = frame.Crop(manaRect.X, manaRect.Y, manaRect.Width, manaRect.Height);
+                
                 for (int i = 0; i < _manaMasks.Length; i++)
                 {
                     byte[][] mask = _manaMasks[i];
@@ -282,12 +269,45 @@ public sealed class StateMachine
 
         return -1;
     }
-    
+
+    private int GetSpellMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
+    {
+        int mW = (int)(WindowSize.Height / 90.0f);
+        int mH = (int)(WindowSize.Height / 90.0f);
+
+        var mPos = new Point[]
+        {
+            new(WindowSize.Width - (int)(WindowSize.Width / 7.902f), WindowSize.Height - (int)(WindowSize.Height / 2.714f)),
+            new(WindowSize.Width - (int)(WindowSize.Width / 8.702f), WindowSize.Height - (int)(WindowSize.Height / 2.670f)),
+            new(WindowSize.Width - (int)(WindowSize.Width / 9.62f), WindowSize.Height - (int)(WindowSize.Height / 2.590f))
+        };
+
+        Image<Bgr, byte> lastFrame = frames.Last();
+
+        int spellMana = 0;
+        foreach (Point curManaPos in mPos)
+        {
+            using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaPos.X, curManaPos.Y, mW, mH);
+            using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
+            using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
+            using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
+            using Image<Gray, byte>? btnTargetAndMask = targetAndMask.Convert<Gray, byte>();
+
+            int numBluePx = CvInvoke.CountNonZero(btnTargetAndMask);
+            if (numBluePx <= 40)
+                break;
+
+            ++spellMana;
+        }
+
+        return Math.Min(3, spellMana);
+    }
+
     private async Task UpdateCardsOnBoardAsync()
     {
         // Store cards references so we can update the card data but in same card instance
         List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
-        
+
         // Clear board state before update
         CardsOnBoard.Clear();
 
@@ -358,19 +378,19 @@ public sealed class StateMachine
             }
         }
     }
-    
+
     public void UpdateClientInfo()
     {
         GameWindowHandle = GetWindowHandle();
         (WindowLocation, WindowSize) = GetWindowRectInfo();
         GameIsForeground = GetGameIsForeground();
     }
-    
+
     public async Task UpdateGameDataAsync(CancellationToken ct = default)
     {
         if (GameWindowHandle == IntPtr.Zero)
             throw new Exception($"'{nameof(UpdateClientInfo)}' must to be called at least once before calling this function.");
-        
+
         // Client API
         _gameResult = await GetGameResultAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         _gameData = await GetGameDataAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
@@ -380,6 +400,7 @@ public sealed class StateMachine
         Image<Bgr, byte>[] frames = GetFrames();
         GameState = GetGameState(frames);
         Mana = GetMana(frames);
+        SpellMana = GetSpellMana(frames);
 
         // Clean
         foreach (Image<Bgr, byte> frame in frames)

@@ -152,26 +152,6 @@ public sealed class Bot
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         
         return true;
-
-        //// its owner refills 1 spell mana
-        //if (handCard.Keywords.Contains(GameCardKeyword.Attune))
-        //    this.spellMana = Math.Min(3, this.spellMana + 1);
-
-        //// Calculate spell mana if necessary
-        //if (handCard.Type == GameCardType.Spell)
-        //    this.spellMana = Math.Max(0, this.spellMana - handCard.Cost);
-
-        //// Get new mana
-        //await Task.Delay(1250, ct).ConfigureAwait(false);
-        //while (true)
-        //{
-        //    await _stateMachine.UpdateAsync(ct).ConfigureAwait(false);
-
-        //    if (_stateMachine.Mana != -1)
-        //        break;
-        //}
-
-        //this.prevMana = this.mana;
     }
 
     private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
@@ -284,6 +264,8 @@ public sealed class Bot
         //       That will count as '_stateMachine.GameState' == 'EGameState.Blocking'
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
+        _logger?.LogInformation("Current game state: {GameState}", _stateMachine.GameState);
+        
         switch (_stateMachine.GameState)
         {
             case EGameState.None:
