@@ -21,7 +21,8 @@ public sealed class GameClientApi : IDisposable
     {
         _httpClient = new HttpClient()
         {
-            BaseAddress = new Uri($"http://127.0.0.1:{port}/")
+            BaseAddress = new Uri($"http://127.0.0.1:{port}/"),
+            Timeout = TimeSpan.FromSeconds(10)
         };
         
         _requestsMap = new Dictionary<GameClientApiRequestType, string>()

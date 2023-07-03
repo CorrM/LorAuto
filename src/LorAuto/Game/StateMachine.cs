@@ -285,40 +285,34 @@ public sealed class StateMachine
     
     private async Task UpdateCardsOnBoardAsync()
     {
-        // TODO: BUG, if two copy of card in the board strategy attack/block can't add them in dictionary because they are equal an dictionary need unique key
-
         // Store cards references so we can update the card data but in same card instance
         List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
         
         // Clear board state before update
         CardsOnBoard.Clear();
 
-        // NOTE: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
+        // TODO: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
         (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
             return;
 
-        foreach (GameClientRectangle rectCard in cardPositions.Rectangles)
+        foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
         {
-            string cardCode = rectCard.CardCode;
-            if (cardCode == "face")
-                continue;
-
-            GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(cardCode)).Value;
-            if (gameCardSet is null)
-            {
-                // TODO: dont use console
-                Console.WriteLine($"Warning: card set that contains card with key({cardCode}) not found.");
-                continue;
-            }
-
-            // TODO: Better way to make update for card, instead of make a new instance
-            var inGameCard = new InGameCard(gameCardSet.Cards[cardCode], rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
-            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c == inGameCard);
+            InGameCard inGameCard;
+            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
             if (toUpdate is not null)
             {
-                toUpdate.Update(inGameCard);
+                toUpdate.Update(rectCard);
                 inGameCard = toUpdate;
+            }
+            else
+            {
+                GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode)).Value;
+                if (gameCardSet is null)
+                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found.");
+
+                GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
+                inGameCard = new InGameCard(cardSetCard, rectCard);
             }
 
             CardsOnBoard.AllCards.Add(inGameCard);
@@ -326,7 +320,7 @@ public sealed class StateMachine
             int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
             float yRatio = (float)cardY / WindowSize.Height;
 
-            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardRatio((float)rectCard.Height / WindowSize.Height) > .3f
+            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
             {
                 CardsOnBoard.CardsMulligan.Add(inGameCard);
                 continue;
@@ -394,6 +388,7 @@ public sealed class StateMachine
         if (GameState != EGameState.End)
             return;
 
+        CardsOnBoard.Clear();
         Mana = 0;
         SpellMana = 0;
         // prev_mana = 0;
