@@ -1,9 +1,9 @@
-﻿using System.Diagnostics;
-using LorAuto.Card.Model;
+﻿using LorAuto.Card.Model;
 using LorAuto.Client.Model;
 using LorAuto.Game;
 using LorAuto.Strategies;
 using LorAuto.Strategies.Model;
+using Microsoft.Extensions.Logging;
 
 namespace LorAuto;
 
@@ -30,19 +30,25 @@ internal class BotCurrentGameState
 /// </summary>
 public sealed class Bot
 {
+    /*
+     NOTES:
+     - Every method that effect or interact with cards must to update StateMachine before return
+    */
     private readonly StateMachine _stateMachine;
     private readonly Strategy _strategy;
     private readonly GameRotationType _gameRotationType;
     private readonly bool _isPvp;
+    private readonly ILogger? _logger;
     private readonly BotCurrentGameState _currentGameState;
     private readonly UserSimulator _userSimulator;
 
-    public Bot(StateMachine stateMachine, Strategy strategy, GameRotationType gameRotationType, bool isPvp)
+    public Bot(StateMachine stateMachine, Strategy strategy, GameRotationType gameRotationType, bool isPvp, ILogger? logger)
     {
         _stateMachine = stateMachine;
         _strategy = strategy;
         _gameRotationType = gameRotationType;
         _isPvp = isPvp;
+        _logger = logger;
 
         _currentGameState = new BotCurrentGameState();
         _userSimulator = new UserSimulator(_stateMachine);
@@ -55,16 +61,12 @@ public sealed class Bot
         _currentGameState.Mulligan = true;
 
         // Wait before do any action
-        Thread.Sleep(Random.Shared.Next(6000, 10000));
+        Thread.Sleep(Random.Shared.Next(6000, 8000));
 
-        BoardCards? boardState = _stateMachine.CardsOnBoard;
-        if (boardState is null)
-            throw new UnreachableException();
-
-        IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(boardState.CardsMulligan);
+        IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
         foreach (InGameCard card in cardsToReplace)
         {
-            if (!boardState.CardsMulligan.Contains(card))
+            if (!_stateMachine.CardsOnBoard.CardsMulligan.Contains(card))
                 continue;
 
             _userSimulator.ClickCard(card);
@@ -81,7 +83,7 @@ public sealed class Bot
         if (!_currentGameState.FirstPassBlocking)
         {
             _currentGameState.FirstPassBlocking = true;
-            Console.WriteLine("first blocking pass...");
+            _logger?.LogInformation("First blocking pass...");
             await Task.Delay(6000, ct).ConfigureAwait(false);
             return;
         }
@@ -95,6 +97,9 @@ public sealed class Bot
         
         foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
         {
+            // Update before block
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+            
             // Check if card is already blocked
             bool isBlockable = true;
             foreach (InGameCard allyCard in _stateMachine.CardsOnBoard.CardsAttackOrBlock)
@@ -108,18 +113,17 @@ public sealed class Bot
 
             if (!isBlockable)
                 continue;
-
+            
             _userSimulator.BlockCard(myCard, opponentCard);
-
-            // Update state machine as cards rectangles will change after move
-            // card to block
-            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-
-            await Task.Delay(Random.Shared.Next(300, 600), ct).ConfigureAwait(false);
+            
+            await Task.Delay(Random.Shared.Next(800, 1000), ct).ConfigureAwait(false);
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
         await Task.Delay(10000, ct).ConfigureAwait(false);
+        
+        // Update cards rectangles as it changed after move card to block
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
     }
 
     private async Task<bool> PlayCardsFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
@@ -132,7 +136,8 @@ public sealed class Bot
             return false;
         }
         
-        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false); // Update cards positions
+        // Update cards
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
         (InGameCard HandCard, List<InGameCard?>? Targets)? playHandCard = _strategy.PlayHandCard(
             _stateMachine.CardsOnBoard,
@@ -146,6 +151,11 @@ public sealed class Bot
 
         // TODO: use playHandCard.Targets
         _userSimulator.PlayCard(playHandCard.Value.HandCard);
+
+        await Task.Delay(4000, ct).ConfigureAwait(false);
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+        
+        return true;
 
         //// its owner refills 1 spell mana
         //if (handCard.Keywords.Contains(GameCardKeyword.Attune))
@@ -166,11 +176,6 @@ public sealed class Bot
         //}
 
         //this.prevMana = this.mana;
-
-        await Task.Delay(4000, ct).ConfigureAwait(false);
-        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-
-        return true;
     }
 
     private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
@@ -182,13 +187,19 @@ public sealed class Bot
             if (!_currentGameState.FirstPassBlocking)
             {
                 _currentGameState.FirstPassBlocking = true;
-                Console.WriteLine("first spell pass...");
-                Thread.Sleep(6000);
+                _logger?.LogInformation("First blocking pass...");
+                await Task.Delay(6000, ct).ConfigureAwait(false);
+                
+                // Update cards
+                await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
                 return true;
             }
 
             _userSimulator.CommitOrPassOrSkipTurn();
-            await Task.Delay(4000, ct).ConfigureAwait(false);
+            await Task.Delay(_stateMachine.CardsOnBoard.SpellStack.Count * 2500, ct).ConfigureAwait(false);
+            
+            // Update cards
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             return true;
         }
 
@@ -203,6 +214,9 @@ public sealed class Bot
         {
             _userSimulator.CommitOrPassOrSkipTurn();
             await Task.Delay(4000, ct).ConfigureAwait(false);
+            
+            // Update cards
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             return true;
         }
 
@@ -213,18 +227,18 @@ public sealed class Bot
 
         // Play cards from hand
         if (playableCards.Count <= 0 || gamePlayAction != EGamePlayAction.PlayCards)
-            return true;
+            return false;
         
         bool thereCardPlayed = await PlayCardsFromHandAsync(playableCards, ct).ConfigureAwait(false);
         if (!thereCardPlayed)
-            return true;
+            return false;
 
         await Task.Delay(4000, ct).ConfigureAwait(false);
         
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         
-        return false;
+        return true;
     }
 
     private async Task DefendAsync(CancellationToken ct = default)
@@ -236,7 +250,7 @@ public sealed class Bot
         // Any other 'gamePlayAction' or there is no playable cards
         _userSimulator.CommitOrPassOrSkipTurn();
 
-        await Task.Delay(Random.Shared.Next(1000, 4000), ct).ConfigureAwait(false);
+        await Task.Delay(4000, ct).ConfigureAwait(false);
     }
 
     private async Task AttackAsync(CancellationToken ct = default)

@@ -27,7 +27,7 @@ public class GameCard : IEquatable<GameCard>
         }
     }
 
-    public void Update(GameClientRectangle rectCard)
+    public void Update(GameCard card, GameClientRectangle rectCard)
     {
         throw new Exception("TODO");
     }

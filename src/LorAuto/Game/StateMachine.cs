@@ -85,8 +85,8 @@ public sealed class StateMachine
         if (!User32.GetWindowRect(GameWindowHandle, out RECT targetRect))
             return (new Point(), new Size());
 
-        var loc = new Point(targetRect.top, targetRect.left);
-        var size = new Size(targetRect.right - targetRect.top, targetRect.bottom - targetRect.left);
+        var loc = new Point(targetRect.left, targetRect.top);
+        var size = new Size(targetRect.right - targetRect.left, targetRect.bottom - targetRect.top);
 
         return (loc, size);
     }
@@ -120,24 +120,24 @@ public sealed class StateMachine
         const int framesCount = 4;
         (Point loc, Size size) = GetWindowRectInfo();
         var frames = new Image<Bgr, byte>[framesCount];
-
+        
         using User32.SafeDCHandle hdcScreen = User32.GetDC(IntPtr.Zero);
         using User32.SafeDCHandle hdc = Gdi32.CreateCompatibleDC(hdcScreen);
 
-        IntPtr hBmp = Gdi32.CreateCompatibleBitmap(hdcScreen, size.Width, size.Height);
-        Gdi32.SelectObject(hdc, hBmp);
+        IntPtr hBitmap = Gdi32.CreateCompatibleBitmap(hdcScreen, size.Width, size.Height);
+        Gdi32.SelectObject(hdc, hBitmap);
 
         for (int i = 0; i < framesCount; i++)
         {
             Gdi32.BitBlt(hdc, 0, 0, size.Width, size.Height, hdcScreen, loc.X, loc.Y, 0xCC0020);
 
-            using Bitmap bitmap = Image.FromHbitmap(hBmp);
+            using Bitmap bitmap = Image.FromHbitmap(hBitmap);
             frames[i] = bitmap.ToImage<Bgr, byte>();
 
             Thread.Sleep(8);
         }
 
-        Gdi32.DeleteObject(hBmp);
+        Gdi32.DeleteObject(hBitmap);
 
         return frames;
     }
@@ -285,6 +285,8 @@ public sealed class StateMachine
     
     private async Task UpdateCardsOnBoardAsync()
     {
+        // TODO: BUG, if two copy of card in the board strategy attack/block can't add them in dictionary because they are equal an dictionary need unique key
+
         // Store cards references so we can update the card data but in same card instance
         List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
         
@@ -310,6 +312,7 @@ public sealed class StateMachine
                 continue;
             }
 
+            // TODO: Better way to make update for card, instead of make a new instance
             var inGameCard = new InGameCard(gameCardSet.Cards[cardCode], rectCard.TopLeftX, rectCard.TopLeftY, rectCard.Width, rectCard.Height, rectCard.LocalPlayer);
             InGameCard? toUpdate = previousCards.FirstOrDefault(c => c == inGameCard);
             if (toUpdate is not null)
