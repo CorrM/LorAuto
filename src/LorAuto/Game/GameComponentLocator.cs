@@ -10,25 +10,60 @@ public sealed class GameComponentLocator
     {
         _stateMachine = stateMachine;
     }
-
-    public (Point Left, Point Right) GetAttackTokenBound()
-    {
-        int attackTokenBoundLx = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.80f);
-        int attackTokenBoundLy = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6f);
-        int attackTokenBoundRx = ((int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.9f)) - attackTokenBoundLx;
-        int attackTokenBoundRy = ((int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.78f)) - attackTokenBoundLy;
-        
-        return (new Point(attackTokenBoundLx, attackTokenBoundLy), new Point(attackTokenBoundRx, attackTokenBoundRy));
-    }
-
+    
     public Rectangle GetManaRect()
     {
-        // This numbers are critical
+        // This numbers are critical, any pixel to left or right, 'GetMana' function will not work
         int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.8255f); // 1585
         int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.5907f); // 638
         const int w = 50; // TODO: Should be ratio
         const int h = 37; // TODO: Should be ratio
 
+        return new Rectangle(x, y, w, h);
+    }
+
+    public Rectangle[] GetSpellManaRect()
+    {
+        int mW = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.00625f);
+        int mH = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0111f);
+
+        var ret = new Rectangle[]
+        {
+            new((int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.8739f), (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6314f), mW, mH),
+            new((int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.8854f), (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6259f), mW, mH),
+            new((int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.8958f), (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6149f), mW, mH)
+        };
+        
+        return ret;
+    }
+
+    public Rectangle GetTurnButtonRect()
+    {
+        int x = (int)(_stateMachine.WindowSize.Width * 0.77);
+        int y = (int)(_stateMachine.WindowSize.Height * 0.42);
+        int w = (int)(_stateMachine.WindowSize.Width * 0.93) - x;
+        int h = (int)(_stateMachine.WindowSize.Height * 0.58) - y;
+
+        return new Rectangle(x, y, w, h);
+    }
+    
+    public Rectangle GetAttackTokenBounds()
+    {
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.80f);
+        int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6f);
+        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.1f);
+        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.1814f);
+        
+        return new Rectangle(x, y, w, h);
+    }
+
+    public Rectangle GetRoundsLogRect()
+    {
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.0156f);
+        int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.4752f);
+        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.0333f);
+        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0555f);
+        
         return new Rectangle(x, y, w, h);
     }
 }

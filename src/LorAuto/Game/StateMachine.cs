@@ -97,16 +97,16 @@ public sealed class StateMachine
         return hWindow == GameWindowHandle;
     }
 
-    private async Task<GameResultApiResponse?> GetGameResultAsync()
+    private async Task<GameResultApiResponse?> GetGameResultAsync(CancellationToken ct = default)
     {
-        (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync().ConfigureAwait(false);
+        (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync(ct).ConfigureAwait(false);
         if (exception is not null || response is null)
             return null;
 
         return response;
     }
 
-    private async Task<CardPositionsApiResponse?> GetGameDataAsync()
+    private async Task<CardPositionsApiResponse?> GetGameDataAsync(CancellationToken ct = default)
     {
         (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
         if (exception is not null || response is null)
@@ -115,6 +115,82 @@ public sealed class StateMachine
         return response;
     }
 
+    private async Task UpdateCardsOnBoardAsync(CancellationToken ct = default)
+    {
+        // Store cards references so we can update the card data but in same card instance
+        List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
+
+        // Clear board state before update
+        CardsOnBoard.Clear();
+
+        // TODO: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
+        (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
+        if (exception is not null || cardPositions is null)
+            return;
+
+        foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
+        {
+            InGameCard inGameCard;
+            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
+            if (toUpdate is not null)
+            {
+                toUpdate.Update(rectCard);
+                inGameCard = toUpdate;
+            }
+            else
+            {
+                GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode)).Value;
+                if (gameCardSet is null)
+                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found.");
+
+                GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
+                inGameCard = new InGameCard(cardSetCard, rectCard);
+            }
+
+            CardsOnBoard.AllCards.Add(inGameCard);
+
+            int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
+            float yRatio = (float)cardY / WindowSize.Height;
+
+            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
+            {
+                CardsOnBoard.CardsMulligan.Add(inGameCard);
+                continue;
+            }
+
+            switch (yRatio)
+            {
+                case > 0.97f:
+                    CardsOnBoard.CardsHand.Add(inGameCard);
+                    break;
+
+                case > 0.75f:
+                    CardsOnBoard.CardsBoard.Add(inGameCard);
+                    break;
+
+                case > 0.6f:
+                    CardsOnBoard.CardsAttackOrBlock.Add(inGameCard);
+                    break;
+
+                case > 0.45f:
+                    CardsOnBoard.SpellStack.Add(inGameCard);
+                    break;
+
+                case > 0.275f:
+                    CardsOnBoard.OpponentCardsAttackOrBlock.Add(inGameCard);
+                    break;
+
+                case > 0.1f:
+                    CardsOnBoard.OpponentCardsBoard.Add(inGameCard);
+                    break;
+
+                default:
+                    CardsOnBoard.OpponentCardsHand.Add(inGameCard);
+                    break;
+            }
+        }
+    }
+    
     private Image<Bgr, byte>[] GetFrames()
     {
         const int framesCount = 4;
@@ -144,10 +220,6 @@ public sealed class StateMachine
 
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
-        // TODO: Give user control to pause bot
-        //if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
-        //    return GameState.Hold;
-
         if (_gameResult is not null)
         {
             if (_gameResult.GameID > _prevGameID)
@@ -177,13 +249,15 @@ public sealed class StateMachine
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
             return EGameState.Mulligan;
 
-        // TODO: Maybe need some more conditions as the python bot are using sleep a lot, so it just maybe thats why blocking state are accurate
-        //       Anyway ("Check if card is already blocked") check in `Bot::Block` method can handle it
+        // TODO: Maybe need some more conditions as the python bot are using sleep a lot, so it just maybe that's why blocking state are accurate
+        //       anyway ("Check if card is already blocked") check in `Bot::Block` method can handle it
         if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
             return EGameState.Blocking;
 
         // Check if it's our turn
-        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop((int)(WindowSize.Width * 0.77), (int)(WindowSize.Height * 0.42), (int)(WindowSize.Width * 0.93) - (int)(WindowSize.Width * 0.77), (int)(WindowSize.Height * 0.58) - (int)(WindowSize.Height * 0.42));
+        Rectangle turnButtonRect = ComponentLocator.GetTurnButtonRect();
+        
+        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(turnButtonRect.X, turnButtonRect.Y, turnButtonRect.Width, turnButtonRect.Height);
         using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
         using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
         using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
@@ -194,9 +268,9 @@ public sealed class StateMachine
             return EGameState.OpponentTurn;
 
         // Check if local_player has the attack token
-        (Point l, Point r) = ComponentLocator.GetAttackTokenBound();
+        Rectangle attackRect = ComponentLocator.GetAttackTokenBounds();
 
-        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(l.X, l.Y, r.X, r.Y);
+        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackRect.X, attackRect.Y, attackRect.Width, attackRect.Height);
         using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
 
         using Image<Gray, byte>? attackTokenMask1 = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
@@ -270,24 +344,15 @@ public sealed class StateMachine
         return -1;
     }
 
-    private int GetSpellMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
+    private int GetSpellMana(Image<Bgr, byte>[] frames)
     {
-        int mW = (int)(WindowSize.Height / 90.0f);
-        int mH = (int)(WindowSize.Height / 90.0f);
-
-        var mPos = new Point[]
-        {
-            new(WindowSize.Width - (int)(WindowSize.Width / 7.902f), WindowSize.Height - (int)(WindowSize.Height / 2.714f)),
-            new(WindowSize.Width - (int)(WindowSize.Width / 8.702f), WindowSize.Height - (int)(WindowSize.Height / 2.670f)),
-            new(WindowSize.Width - (int)(WindowSize.Width / 9.62f), WindowSize.Height - (int)(WindowSize.Height / 2.590f))
-        };
-
         Image<Bgr, byte> lastFrame = frames.Last();
+        Rectangle[] spellManaRect = ComponentLocator.GetSpellManaRect();
 
         int spellMana = 0;
-        foreach (Point curManaPos in mPos)
+        foreach (Rectangle curManaRect in spellManaRect)
         {
-            using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaPos.X, curManaPos.Y, mW, mH);
+            using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaRect.X, curManaRect.Y, curManaRect.Width, curManaRect.Height);
             using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
             using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
             using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
@@ -302,83 +367,7 @@ public sealed class StateMachine
 
         return Math.Min(3, spellMana);
     }
-
-    private async Task UpdateCardsOnBoardAsync()
-    {
-        // Store cards references so we can update the card data but in same card instance
-        List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
-
-        // Clear board state before update
-        CardsOnBoard.Clear();
-
-        // TODO: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
-        (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
-        if (exception is not null || cardPositions is null)
-            return;
-
-        foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
-        {
-            InGameCard inGameCard;
-            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
-            if (toUpdate is not null)
-            {
-                toUpdate.Update(rectCard);
-                inGameCard = toUpdate;
-            }
-            else
-            {
-                GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode)).Value;
-                if (gameCardSet is null)
-                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found.");
-
-                GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
-                inGameCard = new InGameCard(cardSetCard, rectCard);
-            }
-
-            CardsOnBoard.AllCards.Add(inGameCard);
-
-            int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
-            float yRatio = (float)cardY / WindowSize.Height;
-
-            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
-            {
-                CardsOnBoard.CardsMulligan.Add(inGameCard);
-                continue;
-            }
-
-            switch (yRatio)
-            {
-                case > 0.97f:
-                    CardsOnBoard.CardsHand.Add(inGameCard);
-                    break;
-
-                case > 0.75f:
-                    CardsOnBoard.CardsBoard.Add(inGameCard);
-                    break;
-
-                case > 0.6f:
-                    CardsOnBoard.CardsAttackOrBlock.Add(inGameCard);
-                    break;
-
-                case > 0.45f:
-                    CardsOnBoard.SpellStack.Add(inGameCard);
-                    break;
-
-                case > 0.275f:
-                    CardsOnBoard.OpponentCardsAttackOrBlock.Add(inGameCard);
-                    break;
-
-                case > 0.1f:
-                    CardsOnBoard.OpponentCardsBoard.Add(inGameCard);
-                    break;
-
-                default:
-                    CardsOnBoard.OpponentCardsHand.Add(inGameCard);
-                    break;
-            }
-        }
-    }
-
+    
     public void UpdateClientInfo()
     {
         GameWindowHandle = GetWindowHandle();
@@ -392,9 +381,9 @@ public sealed class StateMachine
             throw new Exception($"'{nameof(UpdateClientInfo)}' must to be called at least once before calling this function.");
 
         // Client API
-        _gameResult = await GetGameResultAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
-        _gameData = await GetGameDataAsync().ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
-        await UpdateCardsOnBoardAsync().ConfigureAwait(false); // must to be called before 'GetGameState'
+        _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        _gameData = await GetGameDataAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        await UpdateCardsOnBoardAsync(ct).ConfigureAwait(false); // must to be called before 'GetGameState'
 
         // Game
         Image<Bgr, byte>[] frames = GetFrames();

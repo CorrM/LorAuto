@@ -2,6 +2,7 @@
 using GameOverlay.Windows;
 using LorAuto;
 using LorAuto.Card.Model;
+using LorAuto.Cli;
 using LorAuto.Client;
 using LorAuto.Game;
 using LorAuto.Strategies;
@@ -52,103 +53,23 @@ if (stateMachine.GameWindowHandle == IntPtr.Zero)
 await stateMachine.UpdateGameDataAsync(cts.Token).ConfigureAwait(false);
 
 // Game overlay
-var windowGfx = new Graphics()
-{
-    MeasureFPS = true,
-    PerPrimitiveAntiAliasing = true,
-    TextAntiAliasing = true
-};
+Log.Logger.Information("Overlay starts");
 
-var window = new StickyWindow(stateMachine.GameWindowHandle, windowGfx)
-{
-    FPS = 60,
-    IsTopmost = true,
-    IsVisible = true,
-    BypassTopmost = true
-};
-
-window.DrawGraphics += (sender, e) =>
-{
-    Graphics? gfx = e.Graphics;
-    if (gfx is null)
-        return;
-
-    SolidBrush rBrush = gfx.CreateSolidBrush(255, 0, 0);
-    SolidBrush bBrush = gfx.CreateSolidBrush(0, 0, 255);
-    SolidBrush gBrush = gfx.CreateSolidBrush(0, 255, 0);
-
-    InGameCard card = null!;
-    lock (stateMachine)
-    {
-        if (stateMachine.CardsOnBoard.CardsAttackOrBlock.Count == 0)
-        {
-            gfx.ClearScene();
-            return;
-        }
-
-        try
-        {
-            card = stateMachine.CardsOnBoard.CardsAttackOrBlock[0];
-        }
-        catch
-        {
-            gfx.ClearScene();
-            return;
-        }
-    }
-    
-    if (card.Type is GameCardType.Spell or GameCardType.Ability)
-        return;
-    
-    gfx.ClearScene();
-    
-    int x = card.Position.X;
-    int y = stateMachine.WindowSize.Height - card.Position.Y;
-    
-    gfx.DrawRectangle(
-        gBrush,
-        x,
-        y,
-        x + card.Size.Width,
-        y + card.Size.Height,
-        2.0f);
-    
-    gfx.DrawRectangle(
-        rBrush,
-        x,
-        y,
-        x + (card.Size.Width / 2),
-        y + (card.Size.Height / 4),
-        1.0f);
-    
-    gfx.DrawRectangle(
-        bBrush,
-        x + (card.Size.Width / 2),
-        y,
-        x + card.Size.Width,
-        y + (card.Size.Height / 4),
-        1.0f);
-};
-
-window.Create();
+using var overlay = new BotOverlay(stateMachine);
+overlay.Start();
 
 // BOT
-ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
+using ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
 var bot = new Bot(stateMachine, new Generic(), GameRotationType.Standard, false, loggerFactory.CreateLogger<Bot>());
 
 while (!cts.IsCancellationRequested)
 {
-    lock (stateMachine)
-    {
-        stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-    }
-
-    await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
+    //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+    //await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
     await Task.Delay(8).ConfigureAwait(false);
 }
 
 // Clean
-window.Dispose();
 Log.CloseAndFlush();
 
 return 0;
