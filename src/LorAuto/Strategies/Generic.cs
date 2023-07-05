@@ -29,24 +29,35 @@ public sealed class Generic : Strategy
         abilitiesToUse = null;
 
         var ret = new Dictionary<InGameCard, InGameCard>();
-        for (var i = 0; i < boardCards.CardsBoard.Count; i++)
+        foreach (InGameCard myCard in boardCards.CardsBoard)
         {
-            if (i >= boardCards.OpponentCardsAttackOrBlock.Count)
+            foreach (InGameCard opponent in boardCards.OpponentCardsAttackOrBlock)
+            {
+                if (opponent.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
+                    continue;
+
+                if (opponent.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
+                    continue;
+            
+                if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
+                    continue;
+            
+                bool isBlockable = true;
+                foreach (InGameCard allyCard in boardCards.CardsAttackOrBlock)
+                {
+                    if (Math.Abs(allyCard.TopCenterPos.X - opponent.TopCenterPos.X) >= 10)
+                        continue;
+
+                    isBlockable = false;
+                    break;
+                }
+
+                if (!isBlockable)
+                    continue;
+                
+                ret.Add(myCard, opponent);
                 break;
-
-            InGameCard myCard = boardCards.CardsBoard[i];
-            InGameCard opponent = boardCards.OpponentCardsAttackOrBlock[i];
-
-            if (opponent.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
-                continue;
-
-            if (opponent.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
-                continue;
-            
-            if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
-                continue;
-            
-            ret.Add(myCard, opponent);
+            }
         }
         
         return ret;
@@ -64,6 +75,14 @@ public sealed class Generic : Strategy
 
     public override List<InGameCard> Attack(BoardCards boardCards, IEnumerable<InGameCard> yourBoardCards)
     {
-        return yourBoardCards.ToList();
+        List<InGameCard> inGameCards = yourBoardCards.ToList();
+        
+        // Support will be listed first
+        //foreach (InGameCard card in inGameCards.Where(c => c.Description.Contains("Support:")))
+        //{
+        //    
+        //}
+        
+        return inGameCards;
     }
 }

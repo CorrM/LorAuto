@@ -2,6 +2,7 @@
 using GregsStack.InputSimulatorStandard;
 using GregsStack.InputSimulatorStandard.Native;
 using LorAuto.Card.Model;
+using LorAuto.Client.Model;
 using LorAuto.Extensions;
 using LorAuto.Game;
 using PInvoke;
@@ -152,6 +153,10 @@ public sealed class UserSimulator
         {
             ForegroundIfGameNot();
             
+            _stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
+            if (_stateMachine.GameState == EGameState.MenusDeckSelected)
+                break;
+            
             _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY)
                 .LeftButtonClick();
             
@@ -159,5 +164,13 @@ public sealed class UserSimulator
         }
 
         Thread.Sleep(1000);
+    }
+
+    public void ResetMousePosition()
+    {
+        double mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.5);
+        double mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.5);
+        
+        _input.Mouse.MoveMouseSmooth(mouseX, mouseY);
     }
 }

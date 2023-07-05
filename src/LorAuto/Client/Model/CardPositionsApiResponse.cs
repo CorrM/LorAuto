@@ -24,7 +24,7 @@ public sealed class CardPositionsApiResponse
 {
     public required string PlayerName { get; init; }
     public required string OpponentName { get; init; }
-    public required string GameState { get; init; }
+    public required string GameState { get; init; } // TODO: Convert to enum "Menus", "InProgress"
     public required GameClientScreen Screen { get; init; }
     public required List<GameClientRectangle> Rectangles { get; init; }
 }

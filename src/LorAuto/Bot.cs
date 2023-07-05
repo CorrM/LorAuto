@@ -25,6 +25,8 @@ internal class BotCurrentGameState
     }
 }
 
+// TODO: Sometimes attack or block starts early than it should be, it could attack before pull new card that you get every round
+
 /// <summary>
 /// Plays the game, responsible for executing commands from <see cref="Strategy"/>
 /// </summary>
@@ -57,11 +59,15 @@ public sealed class Bot
     private void Mulligan()
     {
         if (_currentGameState.Mulligan)
+        {
+            Thread.Sleep(1500);
             return;
+        }
+        
         _currentGameState.Mulligan = true;
 
         // Wait before do any action
-        Thread.Sleep(Random.Shared.Next(6000, 8000));
+        Thread.Sleep(Random.Shared.Next(1000, 3000));
 
         IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
         foreach (InGameCard card in cardsToReplace)
@@ -239,12 +245,12 @@ public sealed class Bot
         List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
         foreach (InGameCard atkCard in cardsToAttack)
         {
-            // Update cards
-            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-            
             _userSimulator.PlayCard(atkCard);
 
             await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
+            
+            // Update cards
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         }
 
         // Wait for any card effect
@@ -273,15 +279,23 @@ public sealed class Bot
 
             case EGameState.Hold:
                 break;
-
+            
             case EGameState.Menus:
                 _userSimulator.SelectDeck(_gameRotationType, _isPvp);
                 // TODO: Add a way to detect 'EGameState.SearchGame' so this statement doesnt get called more than once
+                break;
+            
+            case EGameState.MenusDeckSelected:
+                _userSimulator.SelectDeck(_gameRotationType, _isPvp);
                 break;
 
             case EGameState.SearchGame:
                 break;
 
+            case EGameState.UserInteractNotReady:
+                await Task.Delay(3000, ct).ConfigureAwait(false);
+                break;
+            
             case EGameState.Mulligan:
                 Mulligan();
                 break;
@@ -315,14 +329,14 @@ public sealed class Bot
                 _currentGameState.Reset();
                 _userSimulator.GameEndContinueAndReplay();
                 break;
-
+            
             default:
                 throw new ArgumentOutOfRangeException();
         }
 
+        Thread.Sleep(1000);
+        
         // Move mouse to center after each play 
-        //int mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width / 2);
-        //int mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height / 2);
-        //_input.Mouse.MoveMouseSmooth(mouseX, mouseY);
+        _userSimulator.ResetMousePosition();
     }
 }

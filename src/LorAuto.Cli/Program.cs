@@ -50,8 +50,6 @@ if (stateMachine.GameWindowHandle == IntPtr.Zero)
     return -1;
 }
 
-await stateMachine.UpdateGameDataAsync(cts.Token).ConfigureAwait(false);
-
 // Game overlay
 Log.Logger.Information("Overlay starts");
 
@@ -65,7 +63,7 @@ var bot = new Bot(stateMachine, new Generic(), GameRotationType.Standard, false,
 while (!cts.IsCancellationRequested)
 {
     //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-    //await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
+    await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
     await Task.Delay(8).ConfigureAwait(false);
 }
 

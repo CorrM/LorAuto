@@ -48,23 +48,10 @@ public sealed class GameClientApi : IDisposable
             if (activeDeckJson is null)
                 throw new UnreachableException();
 
-            JsonNode? cardsInDeckJNode = activeDeckJson["CardsInDeck"];
-            List<GameClientCardInDeck>? cardInDecks;
-            if (cardsInDeckJNode is null)
-            {
-                cardInDecks = null;
-            }
-            else
-            {
-                cardInDecks = cardsInDeckJNode.Deserialize<Dictionary<string, int>>()!
-                    .Select(d => new GameClientCardInDeck() { Code = d.Key, Count = d.Value })
-                    .ToList();
-            }
-
             var activeDeck = new ActiveDeckApiResponse()
             {
                 DeckCode = activeDeckJson["DeckCode"]?.GetValue<string>(),
-                CardsInDeck = cardInDecks
+                CardsInDeck = activeDeckJson["CardsInDeck"]?.Deserialize<Dictionary<string, int>>() ?? new Dictionary<string, int>()
             };
             return (activeDeck, null);
         }

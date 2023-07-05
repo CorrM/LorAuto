@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Diagnostics;
+using System.Drawing;
 using Emgu.CV;
 using Emgu.CV.Structure;
 using LorAuto.Card.Model;
@@ -24,7 +25,7 @@ public sealed class StateMachine
     private readonly int[] _numPxMask;
 
     private int _nGames;
-    private int _prevGameID;
+    private int _prevGameID = -1;
 
     private GameResultApiResponse? _gameResult;
     private CardPositionsApiResponse? _gameData;
@@ -33,10 +34,11 @@ public sealed class StateMachine
     public Point WindowLocation { get; private set; }
     public Size WindowSize { get; private set; }
     public bool GameIsForeground { get; private set; }
-    public GameComponentLocator ComponentLocator { get; private set; }
+    public GameComponentLocator ComponentLocator { get; }
     public int GamesWonCont { get; private set; }
     public EGameState GameState { get; private set; }
-    public BoardCards CardsOnBoard { get; private set; }
+    public BoardCards CardsOnBoard { get; }
+    public ActiveDeckApiResponse ActiveDeck { get; }
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
@@ -53,6 +55,7 @@ public sealed class StateMachine
 
         ComponentLocator = new GameComponentLocator(this);
         CardsOnBoard = new BoardCards();
+        ActiveDeck = new ActiveDeckApiResponse() { DeckCode = null, CardsInDeck = new Dictionary<string, int>() };
         //User32.SetProcessDPIAware();
     }
 
@@ -108,11 +111,28 @@ public sealed class StateMachine
 
     private async Task<CardPositionsApiResponse?> GetGameDataAsync(CancellationToken ct = default)
     {
-        (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync().ConfigureAwait(false);
+        (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
         if (exception is not null || response is null)
             return null;
 
         return response;
+    }
+
+    private async Task UpdateActiveDeckAsync(CancellationToken ct = default)
+    {
+        ActiveDeck.CardsInDeck.Clear();
+
+        (ActiveDeckApiResponse? newActiveDeck, Exception? exception) = await _gameClientApi.GetActiveDeckAsync(ct).ConfigureAwait(false);
+        if (exception is not null || newActiveDeck is null)
+        {
+            ActiveDeck.DeckCode = null;
+            return;
+        }
+
+        ActiveDeck.DeckCode = newActiveDeck.DeckCode;
+
+        foreach ((string cardCode, int cardCount) in newActiveDeck.CardsInDeck)
+            ActiveDeck.CardsInDeck.Add(cardCode, cardCount);
     }
 
     private async Task UpdateCardsOnBoardAsync(CancellationToken ct = default)
@@ -158,6 +178,7 @@ public sealed class StateMachine
                 continue;
             }
 
+            // TODO: Sort cards from left to right, some times opponent attacking cards are right to left
             switch (yRatio)
             {
                 case > 0.97f:
@@ -189,8 +210,10 @@ public sealed class StateMachine
                     break;
             }
         }
+
+        CardsOnBoard.Sort();
     }
-    
+
     private Image<Bgr, byte>[] GetFrames()
     {
         const int framesCount = 4;
@@ -220,8 +243,21 @@ public sealed class StateMachine
 
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
-        if (_gameResult is not null)
+        if (_gameResult is null || _gameData is null)
+            throw new UnreachableException();
+        
+        // # Menus
+        Image<Bgr, byte> lastFrame = frames.Last();
+        if (_gameData.GameState == "Menus")
         {
+            // # Menus deck selected
+            Rectangle menusEditDeckButtonRect = ComponentLocator.GetMenusEditDeckButtonRect();
+
+            using Image<Bgr, byte> menusEditDeckButtonSubImg = lastFrame.Crop(menusEditDeckButtonRect);
+            int menusEditDeckButtonPx = menusEditDeckButtonSubImg.CountNonZeroInHsvRange(new Hsv(10, 70, 140), new Hsv(20, 180, 255));
+            if (menusEditDeckButtonPx > 700)
+                return EGameState.MenusDeckSelected;
+
             if (_gameResult.GameID > _prevGameID)
             {
                 if (_gameResult.LocalPlayerWon)
@@ -232,18 +268,25 @@ public sealed class StateMachine
 
                 return EGameState.End;
             }
-        }
-
-        Image<Bgr, byte> lastFrame = frames.Last();
-        if (_gameData is null || _gameData.GameState == "Menus")
-        {
+            
             // TODO: Check for SearchGame here
             //return EGameState.SearchGame;
-
+            
             return EGameState.Menus;
         }
 
-        // Mulligan check
+        // # User interact not ready
+        Rectangle roundsLogRect = ComponentLocator.GetRoundsLogRect();
+
+        using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(roundsLogRect);
+        int roundsLogPx = roundsLogSubImg.CountNonZeroInHsvRange(new Hsv(20, 80, 130), new Hsv(30, 150, 180));
+        Console.WriteLine($"roundsLogPx: {roundsLogPx}");
+
+        bool inAction = roundsLogPx > 110 && roundsLogPx < 140; // When block or attack image go darker
+        if (!inAction && roundsLogPx < 590)
+            return EGameState.UserInteractNotReady;
+
+        // # Mulligan check
         // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
         GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
@@ -254,38 +297,22 @@ public sealed class StateMachine
         if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
             return EGameState.Blocking;
 
-        // Check if it's our turn
+        // # Check if it's our turn
         Rectangle turnButtonRect = ComponentLocator.GetTurnButtonRect();
-        
-        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(turnButtonRect.X, turnButtonRect.Y, turnButtonRect.Width, turnButtonRect.Height);
-        using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
-        using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
-        using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
-        using Image<Gray, byte>? btnTargetAndMask = targetAndMask.Convert<Gray, byte>();
-
-        int numBluePx = CvInvoke.CountNonZero(btnTargetAndMask);
+        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(turnButtonRect);
+        int numBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
         if (numBluePx < 100) // End turn button is GRAY
             return EGameState.OpponentTurn;
 
-        // Check if local_player has the attack token
-        Rectangle attackRect = ComponentLocator.GetAttackTokenBounds();
+        // # Check if local_player has the attack token
+        Rectangle attackRect = ComponentLocator.GetAttackTokenRect();
 
-        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackRect.X, attackRect.Y, attackRect.Width, attackRect.Height);
-        using Image<Hsv, byte>? attackTokenHsv = attackTokenSubImg.Convert<Hsv, byte>();
-
-        using Image<Gray, byte>? attackTokenMask1 = attackTokenHsv.InRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange
-        using Image<Bgr, byte>? attackTokenTarget1 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask1);
-        using Image<Gray, byte>? attackTokenTargetGray1 = attackTokenTarget1.Convert<Gray, byte>();
-
-        int numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackRect);
+        int numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
             return EGameState.AttackTurn;
 
-        using Image<Gray, byte>? attackTokenMask2 = attackTokenHsv.InRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange
-        using Image<Bgr, byte>? attackTokenTarget2 = attackTokenSubImg.And(attackTokenSubImg, attackTokenMask2);
-        using Image<Gray, byte>? attackTokenTargetGray2 = attackTokenTarget2.Convert<Gray, byte>();
-
-        numOrangePx = CvInvoke.CountNonZero(attackTokenTargetGray1);
+        numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
             return EGameState.AttackTurn;
 
@@ -307,25 +334,25 @@ public sealed class StateMachine
         {
             foreach (Image<Bgr, byte> frame in frames)
             {
-                using Image<Bgr, byte> image = frame.Crop(manaRect.X, manaRect.Y, manaRect.Width, manaRect.Height);
-                
+                using Image<Bgr, byte> image = frame.Crop(manaRect);
+
                 for (int i = 0; i < _manaMasks.Length; i++)
                 {
                     byte[][] mask = _manaMasks[i];
 
-                    using Image<Gray, byte> grayImage = image.Convert<Gray, byte>()
-                        .Canny(100, 100);
+                    using Image<Gray, byte> grayImage = image.Convert<Gray, byte>();
+                    using Image<Gray, byte> cannyImage = grayImage.Canny(100, 100);
 
                     double sum = 0;
                     int count = 0;
-                    for (int y = 0; y < grayImage.Height; y++)
+                    for (int y = 0; y < cannyImage.Height; y++)
                     {
-                        for (int x = 0; x < grayImage.Width; x++)
+                        for (int x = 0; x < cannyImage.Width; x++)
                         {
                             if (mask[y][x] == 0)
                                 continue;
 
-                            sum += grayImage.Data[y, x, 0];
+                            sum += cannyImage.Data[y, x, 0];
                             count++;
                         }
                     }
@@ -352,13 +379,8 @@ public sealed class StateMachine
         int spellMana = 0;
         foreach (Rectangle curManaRect in spellManaRect)
         {
-            using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaRect.X, curManaRect.Y, curManaRect.Width, curManaRect.Height);
-            using Image<Hsv, byte>? hsv = turnBtnSubImg.Convert<Hsv, byte>();
-            using Image<Gray, byte>? mask = hsv.InRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
-            using Image<Bgr, byte>? targetAndMask = turnBtnSubImg.And(turnBtnSubImg, mask);
-            using Image<Gray, byte>? btnTargetAndMask = targetAndMask.Convert<Gray, byte>();
-
-            int numBluePx = CvInvoke.CountNonZero(btnTargetAndMask);
+            using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaRect);
+            int numBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
             if (numBluePx <= 40)
                 break;
 
@@ -367,7 +389,7 @@ public sealed class StateMachine
 
         return Math.Min(3, spellMana);
     }
-    
+
     public void UpdateClientInfo()
     {
         GameWindowHandle = GetWindowHandle();
@@ -383,6 +405,7 @@ public sealed class StateMachine
         // Client API
         _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         _gameData = await GetGameDataAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        await UpdateActiveDeckAsync(ct).ConfigureAwait(false);
         await UpdateCardsOnBoardAsync(ct).ConfigureAwait(false); // must to be called before 'GetGameState'
 
         // Game

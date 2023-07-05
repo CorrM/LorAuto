@@ -16,7 +16,7 @@ public static class MouseSimulator_Extensions
         for (int i = 0; i < smoothFactor; i++)
         {
             float t = EaseInOutQuad((float)i / smoothFactor);
-            mouse.MoveMouseTo((int)(x0 + dx * t), (int)(y0 + dy * t));
+            mouse.MoveMouseTo((int)Math.Ceiling(x0 + dx * t), (int)Math.Ceiling(y0 + dy * t));
             Thread.Sleep(sleepDurationMs);
         }
         

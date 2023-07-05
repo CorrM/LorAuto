@@ -5,6 +5,7 @@ using LorAuto.Strategies.Model;
 namespace LorAuto.Strategies;
 
 // TODO: What if bot want to summon but board is full (6 card in board)
+// TODO: Maybe add `AcceptAttack` and `AcceptBlock` to make sure cards are moved, as card could be stunned
 
 public abstract class Strategy
 {

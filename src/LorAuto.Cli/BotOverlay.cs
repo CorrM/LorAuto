@@ -45,9 +45,6 @@ public sealed class BotOverlay : IDisposable
 
     private void DrawSpellMana(SolidBrush gBrush)
     {
-        if (_stateMachine.GameState is EGameState.Menus or EGameState.End)
-            return;
-
         Rectangle[] spellManaRect = _stateMachine.ComponentLocator.GetSpellManaRect();
         foreach (Rectangle sRect in spellManaRect)
             _windowGfx.DrawRectangle(gBrush, sRect.ToGRect(), 1.0f);
@@ -108,11 +105,19 @@ public sealed class BotOverlay : IDisposable
 
         _windowGfx.ClearScene();
 
-        DrawSpellMana(gBrush);
-        DrawCard(gBrush);
-
-        Rectangle roundsLogRect = _stateMachine.ComponentLocator.GetRoundsLogRect();
-        _windowGfx.DrawRectangle(gBrush, roundsLogRect.ToGRect(), 1.0f);
+        if (_stateMachine.GameState is not (EGameState.Menus or EGameState.End))
+        {
+            DrawSpellMana(gBrush);
+            DrawCard(gBrush);
+            
+            Rectangle roundsLogRect = _stateMachine.ComponentLocator.GetRoundsLogRect();
+            _windowGfx.DrawRectangle(gBrush, roundsLogRect.ToGRect(), 1.0f);
+        }
+        else
+        {
+            Rectangle roundsLogRect = _stateMachine.ComponentLocator.GetMenusEditDeckButtonRect();
+            _windowGfx.DrawRectangle(gBrush, roundsLogRect.ToGRect(), 1.0f);
+        }
     }
 
     public void Start()

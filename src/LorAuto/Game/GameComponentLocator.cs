@@ -39,15 +39,15 @@ public sealed class GameComponentLocator
 
     public Rectangle GetTurnButtonRect()
     {
-        int x = (int)(_stateMachine.WindowSize.Width * 0.77);
-        int y = (int)(_stateMachine.WindowSize.Height * 0.42);
-        int w = (int)(_stateMachine.WindowSize.Width * 0.93) - x;
-        int h = (int)(_stateMachine.WindowSize.Height * 0.58) - y;
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.77);
+        int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.42);
+        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.93) - x;
+        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.58) - y;
 
         return new Rectangle(x, y, w, h);
     }
     
-    public Rectangle GetAttackTokenBounds()
+    public Rectangle GetAttackTokenRect()
     {
         int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.80f);
         int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6f);
@@ -64,6 +64,16 @@ public sealed class GameComponentLocator
         int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.0333f);
         int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0555f);
         
+        return new Rectangle(x, y, w, h);
+    }
+
+    public Rectangle GetMenusEditDeckButtonRect()
+    {
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.9447);
+        int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.5518);
+        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.0353f);
+        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0585f);
+
         return new Rectangle(x, y, w, h);
     }
 }
