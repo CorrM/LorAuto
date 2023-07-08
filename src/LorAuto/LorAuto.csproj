@@ -7,16 +7,53 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Emgu.CV.Bitmap" Version="4.7.0.5276" />
-      <PackageReference Include="Emgu.CV.runtime.windows" Version="4.7.0.5276" />
-      <PackageReference Include="GregsStack.InputSimulatorStandard" Version="1.3.5" />
-      <PackageReference Include="IDisposableAnalyzers" Version="4.0.6">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1" />
-      <PackageReference Include="PInvoke.Gdi32" Version="0.7.124" />
-      <PackageReference Include="PInvoke.User32" Version="0.7.124" />
+        <PackageReference Include="Emgu.CV.Bitmap" Version="4.7.0.5276" />
+        <PackageReference Include="Emgu.CV.runtime.windows" Version="4.7.0.5276" />
+        <PackageReference Include="GregsStack.InputSimulatorStandard" Version="1.3.5" />
+        <PackageReference Include="IDisposableAnalyzers" Version="4.0.6">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1" />
+        <PackageReference Include="PInvoke.Gdi32" Version="0.7.124" />
+        <PackageReference Include="PInvoke.User32" Version="0.7.124" />
+        <PackageReference Include="Tesseract.Drawing" Version="5.2.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="RuntimeDep\TessData\eng.traineddata" />
+        <ContentWithTargetPath Include="RuntimeDep\TessData\eng.traineddata">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>TessData\eng.traineddata</TargetPath>
+        </ContentWithTargetPath>
+        
+        <None Remove="RuntimeDep\runtime-x64\leptonica-1.82.0.dll" />
+        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\leptonica-1.82.0.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>x64\leptonica-1.82.0.dll</TargetPath>
+        </ContentWithTargetPath>
+        
+        <None Remove="RuntimeDep\runtime-x64\libleptonica-1.82.0.so" />
+        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\libleptonica-1.82.0.so">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>x64\libleptonica-1.82.0.so</TargetPath>
+        </ContentWithTargetPath>
+        
+        <None Remove="RuntimeDep\runtime-x64\libtesseract50.so" />
+        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\libtesseract50.so">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>x64\libtesseract50.so</TargetPath>
+        </ContentWithTargetPath>
+        
+        <None Remove="RuntimeDep\runtime-x64\tesseract50.dll" />
+        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\tesseract50.dll">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <TargetPath>x64\tesseract50.dll</TargetPath>
+        </ContentWithTargetPath>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="RuntimeDep\" />
     </ItemGroup>
 
 </Project>

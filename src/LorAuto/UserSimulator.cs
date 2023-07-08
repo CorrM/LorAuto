@@ -81,17 +81,26 @@ public sealed class UserSimulator
             .LeftButtonClick();
     }
     
-    public void PlayCard(InGameCard card)
+    public void ClickCard(InGameCard card)
+    {
+        ForegroundIfGameNot();
+        
+        int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
+        int cy = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
+
+        _input.Mouse.MoveMouseSmooth(cx, cy)
+            .LeftButtonClick();
+    }
+    
+    public void PlayCardFromHand(InGameCard handCard)
     {
         ForegroundIfGameNot();
 
-        int x = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
-
-        _input.Mouse.MoveMouseSmooth(x, y);
-        Thread.Sleep(500); // Wait for the card maximize animation
+        int x = _stateMachine.WindowLocation.X + handCard.TopCenterPos.X;
+        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - handCard.TopCenterPos.Y;
 
         _input.Mouse.MoveMouseSmooth(x, y)
+            .Sleep(500) // Wait for the card maximize animation
             .LeftButtonDown();
 
         int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
@@ -102,22 +111,28 @@ public sealed class UserSimulator
             .LeftButtonUp();
 
         Thread.Sleep(300);
-        if (card.Type != GameCardType.Spell)
+        if (handCard.Type != GameCardType.Spell)
             return;
 
         Thread.Sleep(1000);
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
     }
 
-    public void ClickCard(InGameCard card)
+    public void PlayBoardCard(InGameCard boardCard)
     {
         ForegroundIfGameNot();
-        
-        int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-        int cy = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
 
-        _input.Mouse.MoveMouseSmooth(cx, cy)
-            .LeftButtonClick();
+        int x = _stateMachine.WindowLocation.X + boardCard.TopCenterPos.X;
+        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - boardCard.TopCenterPos.Y;
+        
+        _input.Mouse.MoveMouseSmooth(x, y)
+            .Sleep(40)
+            .LeftButtonDown();
+        
+        int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
+        _input.Mouse.MoveMouseSmooth(x, newY)
+            .Sleep(40)
+            .LeftButtonUp();
     }
 
     public void BlockCard(InGameCard card, InGameCard cardToBeBlocked)

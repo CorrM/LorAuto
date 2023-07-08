@@ -6,6 +6,7 @@ using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
+using LorAuto.OCR;
 using PInvoke;
 using Constants = LorAuto.Game.Model.Constants;
 using Image = System.Drawing.Image;
@@ -21,6 +22,7 @@ public sealed class StateMachine
 {
     private readonly CardSetsManager _cardSetsManager;
     private readonly GameClientApi _gameClientApi;
+    private readonly OcrManager _ocrManager;
     private readonly byte[][][] _manaMasks;
     private readonly int[] _numPxMask;
 
@@ -42,10 +44,11 @@ public sealed class StateMachine
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
-    public StateMachine(CardSetsManager cardSetsManager, GameClientApi gameClientApi)
+    public StateMachine(CardSetsManager cardSetsManager, GameClientApi gameClientApi, OcrManager ocrManager)
     {
         _cardSetsManager = cardSetsManager;
         _gameClientApi = gameClientApi;
+        _ocrManager = ocrManager;
         _manaMasks = new byte[][][]
         {
             Constants.Zero, Constants.One, Constants.Two, Constants.Three, Constants.Four,
@@ -161,7 +164,10 @@ public sealed class StateMachine
             {
                 GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode)).Value;
                 if (gameCardSet is null)
-                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found.");
+                {
+                    _cardSetsManager.DeleteCardSets();
+                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found. (Delete card sets folder may solve the problem)");
+                }
 
                 GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
                 inGameCard = new InGameCard(cardSetCard, rectCard);
@@ -178,7 +184,6 @@ public sealed class StateMachine
                 continue;
             }
 
-            // TODO: Sort cards from left to right, some times opponent attacking cards are right to left
             switch (yRatio)
             {
                 case > 0.97f:
@@ -211,6 +216,7 @@ public sealed class StateMachine
             }
         }
 
+        // Some times opponent attacking cards are right to left
         CardsOnBoard.Sort();
     }
 

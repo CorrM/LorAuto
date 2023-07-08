@@ -152,7 +152,7 @@ public sealed class Bot
             return false;
 
         // TODO: use playHandCard.Targets
-        _userSimulator.PlayCard(playHandCard.Value.HandCard);
+        _userSimulator.PlayCardFromHand(playHandCard.Value.HandCard);
 
         await Task.Delay(4000, ct).ConfigureAwait(false);
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
@@ -245,7 +245,7 @@ public sealed class Bot
         List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
         foreach (InGameCard atkCard in cardsToAttack)
         {
-            _userSimulator.PlayCard(atkCard);
+            _userSimulator.PlayBoardCard(atkCard);
 
             await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
             

@@ -29,19 +29,15 @@ public sealed class Generic : Strategy
         abilitiesToUse = null;
 
         var ret = new Dictionary<InGameCard, InGameCard>();
+        int opponentStartIdx = 0; // To not block same opponent card by all our cards
+        
+        // What if my cards more than opponent cards ?
         foreach (InGameCard myCard in boardCards.CardsBoard)
         {
-            foreach (InGameCard opponent in boardCards.OpponentCardsAttackOrBlock)
+            for (int i = opponentStartIdx; i < boardCards.OpponentCardsAttackOrBlock.Count; i++)
             {
-                if (opponent.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
-                    continue;
-
-                if (opponent.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
-                    continue;
-            
-                if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
-                    continue;
-            
+                InGameCard opponent = boardCards.OpponentCardsAttackOrBlock[i];
+                
                 bool isBlockable = true;
                 foreach (InGameCard allyCard in boardCards.CardsAttackOrBlock)
                 {
@@ -53,9 +49,22 @@ public sealed class Generic : Strategy
                 }
 
                 if (!isBlockable)
+                {
+                    ++opponentStartIdx;
                     continue;
-                
+                }
+
+                if (opponent.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
+                    continue;
+
+                if (opponent.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
+                    continue;
+
+                if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
+                    continue;
+
                 ret.Add(myCard, opponent);
+                ++opponentStartIdx;
                 break;
             }
         }
