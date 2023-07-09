@@ -1,16 +1,33 @@
-﻿namespace LorAuto.Card.Model;
+﻿using System.Text.Json.Nodes;
+
+namespace LorAuto.Card.Model;
 
 [Serializable]
 public class GameCard
 {
-    public string Name { get; init; } = null!;
-    public string CardCode { get; init; } = null!;
-    public int Cost { get; init; }
-    public int Attack { get; init; }
-    public int Health { get; init; }
-    public GameCardType Type { get; init; }
-    public GameCardKeyword[] Keywords { get; init; } = null!;
-    public string Description { get; init; } = null!;
+    public string Name { get; protected set; } = null!;
+    public string CardCode { get; protected set; } = null!;
+    public int Cost { get; protected set; }
+    public int Attack { get; protected set; }
+    public int Health { get; protected set; }
+    public GameCardType Type { get; protected set; }
+    public GameCardKeyword[] Keywords { get; protected set; } = null!;
+    public string Description { get; protected set; } = null!;
+
+    public static GameCard FromJson(JsonNode json)
+    {
+        return new GameCard()
+        {
+            Name = json["name"]!.GetValue<string>(),
+            CardCode = json["cardCode"]!.GetValue<string>(),
+            Cost = json["cost"]!.GetValue<int>(),
+            Attack = json["attack"]!.GetValue<int>(),
+            Health = json["health"]!.GetValue<int>(),
+            Type = Enum.Parse<GameCardType>(json["type"]!.GetValue<string>()),
+            Keywords = json["keywordRefs"]!.AsArray().Select(j => Enum.Parse<GameCardKeyword>(j!.GetValue<string>())).ToArray(),
+            Description = json["descriptionRaw"]!.GetValue<string>(),
+        };
+    }
     
     public override string ToString()
     {

@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using LorAuto.Card.Model;
 
 namespace LorAuto.Game;
 
@@ -75,5 +76,30 @@ public sealed class GameComponentLocator
         int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0585f);
 
         return new Rectangle(x, y, w, h);
+    }
+
+    public (Rectangle Attack, Rectangle Health) GetCardAttackAndHealthRect(InGameCard card)
+    {
+        int wSection = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.0223f);
+        int hSection = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.0370f);
+
+        int x;
+        int y;
+        
+        if (card.IsLocalPlayer)
+        {
+            x = card.TopCenterPos.X;
+            y = card.TopCenterPos.Y + 2;
+        }
+        else
+        {
+            x = card.BottomCenterPos.X;
+            y = card.BottomCenterPos.Y - hSection;
+        }
+        
+        var r1 = new Rectangle(x - 4 - wSection, y, wSection, hSection);
+        var r2 = new Rectangle(x + 8, y, wSection, hSection);
+
+        return (r1, r2);
     }
 }

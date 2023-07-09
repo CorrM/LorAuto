@@ -22,13 +22,19 @@ public static class CvImageExtensions
         return image.Crop(new Rectangle(x, y, width, height));
     }
     
-    public static int CountNonZeroInHsvRange<TColor, TDepth>(this Image<TColor, TDepth> image, Hsv lower, Hsv higher) where TColor : struct, IColor where TDepth : new()
+    public static Image<Gray, byte> InHsvRange<TColor, TDepth>(this Image<TColor, TDepth> image, Hsv lower, Hsv higher) where TColor : struct, IColor where TDepth : new()
     {
-        // TODO: Check if i can get raid of 'targetAndMaskGray'
+        // TODO: Check if i can get raid of 'targetAndMask.Convert<Gray, byte>()'
         using Image<Hsv, byte>? hsv = image.Convert<Hsv, byte>();
         using Image<Gray, byte>? mask = hsv.InRange(lower, higher);
         using Image<TColor, TDepth>? targetAndMask = image.And(image, mask);
-        using Image<Gray, byte>? targetAndMaskGray = targetAndMask.Convert<Gray, byte>();
+
+        return targetAndMask.Convert<Gray, byte>();
+    }
+    
+    public static int CountNonZeroInHsvRange<TColor, TDepth>(this Image<TColor, TDepth> image, Hsv lower, Hsv higher) where TColor : struct, IColor where TDepth : new()
+    {
+        using Image<Gray, byte>? targetAndMaskGray = InHsvRange(image, lower, higher);
 
         return CvInvoke.CountNonZero(targetAndMaskGray);
     }

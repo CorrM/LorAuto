@@ -71,23 +71,12 @@ public sealed class CardSetsManager
             throw new UnreachableException();
 
         var cardsInSet = new Dictionary<string, GameCard>(cardsInSetJson.Count);
-        for (int i = 0; i < cardsInSetJson.Count; i++)
+        foreach (JsonNode? cardJson in cardsInSetJson)
         {
-            JsonNode? cardJson = cardsInSetJson[(Index)i];
             if (cardJson is null)
                 throw new UnreachableException();
 
-            var gameCard = new GameCard()
-            {
-                Name = cardJson["name"]!.GetValue<string>(),
-                CardCode = cardJson["cardCode"]!.GetValue<string>(),
-                Cost = cardJson["cost"]!.GetValue<int>(),
-                Attack = cardJson["attack"]!.GetValue<int>(),
-                Health = cardJson["health"]!.GetValue<int>(),
-                Type = Enum.Parse<GameCardType>(cardJson["type"]!.GetValue<string>()),
-                Keywords = cardJson["keywordRefs"]!.AsArray().Select(j => Enum.Parse<GameCardKeyword>(j!.GetValue<string>())).ToArray(),
-                Description = cardJson["descriptionRaw"]!.GetValue<string>(),
-            };
+            GameCard gameCard = GameCard.FromJson(cardJson);
             cardsInSet.Add(gameCard.CardCode, gameCard);
         }
 

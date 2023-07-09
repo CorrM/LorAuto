@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using LorAuto;
+﻿using LorAuto;
 using LorAuto.Cli;
 using LorAuto.Client;
 using LorAuto.Game;
@@ -8,7 +7,6 @@ using LorAuto.Strategies;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
-using Tesseract;
 
 // # Logger
 Log.Logger = new LoggerConfiguration()
@@ -67,8 +65,8 @@ var bot = new Bot(stateMachine, new Generic(), GameRotationType.Standard, false,
 
 while (!cts.IsCancellationRequested)
 {
-    //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-    await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
+    stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+    //await bot.ProcessAsync(cts.Token).ConfigureAwait(false);
     await Task.Delay(8).ConfigureAwait(false);
 }
 

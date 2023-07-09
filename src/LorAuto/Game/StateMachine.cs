@@ -1,11 +1,13 @@
 ﻿using System.Diagnostics;
 using System.Drawing;
 using Emgu.CV;
+using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
+using LorAuto.Game.Model;
 using LorAuto.OCR;
 using PInvoke;
 using Constants = LorAuto.Game.Model.Constants;
@@ -138,7 +140,144 @@ public sealed class StateMachine
             ActiveDeck.CardsInDeck.Add(cardCode, cardCount);
     }
 
-    private async Task UpdateCardsOnBoardAsync(CancellationToken ct = default)
+    private EInGameCardPosition GetCardPosition(InGameCard card, GameClientRectangle rectCard)
+    {
+        var cardPosition = EInGameCardPosition.None;
+        float yRatio = card.Position.Y / (float)WindowSize.Height;
+        if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
+            cardPosition = EInGameCardPosition.Mulligan;
+
+        if (cardPosition == EInGameCardPosition.None)
+        {
+            cardPosition = yRatio switch
+            {
+                > 0.92f => EInGameCardPosition.Hand,
+                > 0.75f => EInGameCardPosition.Board,
+                > 0.58f => EInGameCardPosition.AttackOrBlock,
+                > 0.44f => EInGameCardPosition.SpellStack,
+                > 0.265f => EInGameCardPosition.OpponentAttackOrBlock,
+                > 0.09f => EInGameCardPosition.OpponentBoard,
+                _ => EInGameCardPosition.OpponentHand
+            };
+        }
+
+        return cardPosition;
+    }
+
+    private void StoreCard(InGameCard card, EInGameCardPosition cardPosition)
+    {
+        // Store cards
+        switch (cardPosition)
+        {
+            case EInGameCardPosition.Mulligan:
+                CardsOnBoard.CardsMulligan.Add(card);
+                break;
+
+            case EInGameCardPosition.Hand:
+                CardsOnBoard.CardsHand.Add(card);
+                break;
+
+            case EInGameCardPosition.Board:
+                CardsOnBoard.CardsBoard.Add(card);
+                break;
+
+            case EInGameCardPosition.AttackOrBlock:
+                CardsOnBoard.CardsAttackOrBlock.Add(card);
+                break;
+
+            case EInGameCardPosition.SpellStack:
+                CardsOnBoard.SpellStack.Add(card);
+                break;
+
+            case EInGameCardPosition.OpponentAttackOrBlock:
+                CardsOnBoard.OpponentCardsAttackOrBlock.Add(card);
+                break;
+
+            case EInGameCardPosition.OpponentBoard:
+                CardsOnBoard.OpponentCardsBoard.Add(card);
+                break;
+
+            case EInGameCardPosition.OpponentHand:
+                CardsOnBoard.OpponentCardsHand.Add(card);
+                break;
+
+            case EInGameCardPosition.None:
+            default:
+                throw new UnreachableException();
+        }
+
+        CardsOnBoard.AllCards.Add(card);
+    }
+
+    private void UpdatePlayableCardAttackHealth(InGameCard card, Image<Bgr, byte>[] frames)
+    {
+        var colors = new (Hsv Lower, Hsv Higher)[]
+        {
+            (new Hsv(0, 0, 230), new Hsv(0, 0, 255)), // White
+            (new Hsv(30, 80, 80), new Hsv(180, 255, 255)), // Green
+            (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
+            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
+            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
+        };
+        
+        (int Number, float Confidence) ReadNumberFromImage(Image<Bgr, byte> img)
+        {
+            var ret = new List<(int Num, float Confidence)>();
+            
+            foreach ((Hsv lower, Hsv higher) in colors)
+            {
+                using Image<Gray, byte> inRangeImg = img.InHsvRange(lower, higher);
+                int countNonZero = CvInvoke.CountNonZero(inRangeImg);
+                if (countNonZero == 0)
+                    continue;
+
+                using Image<Gray, byte> resizeImg = inRangeImg.Resize(120, 120, Inter.Linear);
+                (int number, float confidence) = _ocrManager.ReadNumber(resizeImg);
+                
+                if (number == -1)
+                    continue;
+
+                ret.Add((number, confidence));
+            }
+            
+            return ret.Count > 0 ? ret.MaxBy(x => x.Confidence) : (-1, 0);
+        }
+
+        Image<Bgr, byte> image = frames.First();
+        (Rectangle attackRect, Rectangle healthRect) = ComponentLocator.GetCardAttackAndHealthRect(card);
+
+        // Attack
+        using Image<Bgr, byte> attackCropImg = image.Crop(attackRect);
+        (int attackNumber, float attackConfidence) = ReadNumberFromImage(attackCropImg);
+        
+        Console.WriteLine($"Card ({card.Name}), ATTACK: {attackNumber}, Confidence: {attackConfidence}");
+        
+        if (attackNumber == -1)
+        {
+            // CvInvoke.Imshow("attackNumber", attackRangeImg);
+            // CvInvoke.WaitKey();
+            // CvInvoke.DestroyAllWindows();
+            return;
+        }
+
+        // Health
+        using Image<Bgr, byte> hpCropImg = image.Crop(healthRect);
+        (int hpNumber, float hpConfidence) = ReadNumberFromImage(hpCropImg);
+        
+        Console.WriteLine($"Card ({card.Name}), HEALTH: {hpNumber}, Confidence: {hpConfidence}");
+        
+        if (hpNumber == -1) // Number 5 not work
+        {
+            // CvInvoke.Imshow("attackNumber", hpCropImg);
+            // CvInvoke.WaitKey();
+            // CvInvoke.DestroyAllWindows();
+            return;
+        }
+
+        card.UpdateAttackHealth(attackNumber, hpNumber);
+    }
+
+    private async Task UpdateCardsOnBoardAsync(Image<Bgr, byte>[] frames, CancellationToken ct = default)
     {
         // Store cards references so we can update the card data but in same card instance
         List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
@@ -146,7 +285,7 @@ public sealed class StateMachine
         // Clear board state before update
         CardsOnBoard.Clear();
 
-        // TODO: Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
+        // !Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
         (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
             return;
@@ -157,7 +296,7 @@ public sealed class StateMachine
             InGameCard? toUpdate = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
             if (toUpdate is not null)
             {
-                toUpdate.Update(rectCard);
+                toUpdate.UpdatePosition(rectCard, WindowSize);
                 inGameCard = toUpdate;
             }
             else
@@ -170,49 +309,19 @@ public sealed class StateMachine
                 }
 
                 GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
-                inGameCard = new InGameCard(cardSetCard, rectCard);
+                inGameCard = new InGameCard(cardSetCard, rectCard, WindowSize);
             }
 
-            CardsOnBoard.AllCards.Add(inGameCard);
+            EInGameCardPosition cardPosition = GetCardPosition(inGameCard, rectCard);
+            StoreCard(inGameCard, cardPosition);
 
-            int cardY = WindowSize.Height - inGameCard.TopCenterPos.Y;
-            float yRatio = (float)cardY / WindowSize.Height;
+            if (cardPosition is EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock)
+                UpdatePlayableCardAttackHealth(inGameCard, frames);
 
-            if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
+            // Update hand card cost
+            if (cardPosition == EInGameCardPosition.Hand)
             {
-                CardsOnBoard.CardsMulligan.Add(inGameCard);
-                continue;
-            }
-
-            switch (yRatio)
-            {
-                case > 0.97f:
-                    CardsOnBoard.CardsHand.Add(inGameCard);
-                    break;
-
-                case > 0.75f:
-                    CardsOnBoard.CardsBoard.Add(inGameCard);
-                    break;
-
-                case > 0.6f:
-                    CardsOnBoard.CardsAttackOrBlock.Add(inGameCard);
-                    break;
-
-                case > 0.45f:
-                    CardsOnBoard.SpellStack.Add(inGameCard);
-                    break;
-
-                case > 0.275f:
-                    CardsOnBoard.OpponentCardsAttackOrBlock.Add(inGameCard);
-                    break;
-
-                case > 0.1f:
-                    CardsOnBoard.OpponentCardsBoard.Add(inGameCard);
-                    break;
-
-                default:
-                    CardsOnBoard.OpponentCardsHand.Add(inGameCard);
-                    break;
+                // TODO: Update hand card cost
             }
         }
 
@@ -251,9 +360,9 @@ public sealed class StateMachine
     {
         if (_gameResult is null || _gameData is null)
             throw new UnreachableException();
-        
+
         // # Menus
-        Image<Bgr, byte> lastFrame = frames.Last();
+        Image<Bgr, byte> lastFrame = frames.First();
         if (_gameData.GameState == "Menus")
         {
             // # Menus deck selected
@@ -274,10 +383,10 @@ public sealed class StateMachine
 
                 return EGameState.End;
             }
-            
+
             // TODO: Check for SearchGame here
             //return EGameState.SearchGame;
-            
+
             return EGameState.Menus;
         }
 
@@ -379,7 +488,7 @@ public sealed class StateMachine
 
     private int GetSpellMana(Image<Bgr, byte>[] frames)
     {
-        Image<Bgr, byte> lastFrame = frames.Last();
+        Image<Bgr, byte> lastFrame = frames.First();
         Rectangle[] spellManaRect = ComponentLocator.GetSpellManaRect();
 
         int spellMana = 0;
@@ -408,14 +517,15 @@ public sealed class StateMachine
         if (GameWindowHandle == IntPtr.Zero)
             throw new Exception($"'{nameof(UpdateClientInfo)}' must to be called at least once before calling this function.");
 
+        Image<Bgr, byte>[] frames = GetFrames();
+
         // Client API
         _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         _gameData = await GetGameDataAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         await UpdateActiveDeckAsync(ct).ConfigureAwait(false);
-        await UpdateCardsOnBoardAsync(ct).ConfigureAwait(false); // must to be called before 'GetGameState'
+        await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // must to be called before 'GetGameState'
 
         // Game
-        Image<Bgr, byte>[] frames = GetFrames();
         GameState = GetGameState(frames);
         Mana = GetMana(frames);
         SpellMana = GetSpellMana(frames);

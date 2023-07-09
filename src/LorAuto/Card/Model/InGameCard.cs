@@ -4,6 +4,12 @@ using LorAuto.Client.Model;
 
 namespace LorAuto.Card.Model;
 
+/// <summary>
+/// 
+/// </summary>
+/// <remarks>
+/// <see cref="IEquatable{T}"/> used for data structure that use default compare
+/// </remarks>
 [Serializable]
 public sealed class InGameCard : GameCard, IEquatable<InGameCard>
 {
@@ -11,9 +17,10 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     public Point Position { get; private set; }
     public Size Size { get; private set; }
     public Point TopCenterPos { get; private set; }
+    public Point BottomCenterPos { get; private set; }
     public bool IsLocalPlayer { get; private set; }
 
-    public InGameCard(GameCard otherCard, GameClientRectangle rectCard)
+    public InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize)
     {
         // Using reflection is better than not forgetting to copy any property
         PropertyInfo[] propertyInfos = typeof(GameCard).GetProperties(BindingFlags.Instance | BindingFlags.Public);
@@ -21,18 +28,27 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
             info.SetValue(this, info.GetValue(otherCard));
 
         CardID = rectCard.CardID;
-        Update(rectCard);
+        UpdatePosition(rectCard, windowSize);
     }
     
-    public void Update(GameClientRectangle rectCard)
+    public void UpdatePosition(GameClientRectangle rectCard, Size windowSize)
     {
         if (CardID != rectCard.CardID)
             throw new Exception($"Current card and {nameof(rectCard)} not identical.");
         
-        Position = new Point(rectCard.TopLeftX, rectCard.TopLeftY);
+        int y = windowSize.Height - rectCard.TopLeftY;
+        
+        Position = new Point(rectCard.TopLeftX, y);
         Size = new Size(rectCard.Width, rectCard.Height);
-        TopCenterPos = new Point(rectCard.TopLeftX + (rectCard.Width / 2), rectCard.TopLeftY - (rectCard.Height / 4));
+        TopCenterPos = new Point(rectCard.TopLeftX + (rectCard.Width / 2), y);
+        BottomCenterPos = new Point(rectCard.TopLeftX + (rectCard.Width / 2), y + rectCard.Height);
         IsLocalPlayer = rectCard.LocalPlayer;
+    }
+
+    public void UpdateAttackHealth(int attack, int health)
+    {
+        Attack = attack;
+        Health = health;
     }
     
     public override string ToString()

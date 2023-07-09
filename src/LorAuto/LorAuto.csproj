@@ -17,7 +17,6 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1" />
         <PackageReference Include="PInvoke.Gdi32" Version="0.7.124" />
         <PackageReference Include="PInvoke.User32" Version="0.7.124" />
-        <PackageReference Include="Tesseract.Drawing" Version="5.2.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -28,28 +27,12 @@
         </ContentWithTargetPath>
         
         <None Remove="RuntimeDep\runtime-x64\leptonica-1.82.0.dll" />
-        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\leptonica-1.82.0.dll">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-            <TargetPath>x64\leptonica-1.82.0.dll</TargetPath>
-        </ContentWithTargetPath>
         
         <None Remove="RuntimeDep\runtime-x64\libleptonica-1.82.0.so" />
-        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\libleptonica-1.82.0.so">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-            <TargetPath>x64\libleptonica-1.82.0.so</TargetPath>
-        </ContentWithTargetPath>
         
         <None Remove="RuntimeDep\runtime-x64\libtesseract50.so" />
-        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\libtesseract50.so">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-            <TargetPath>x64\libtesseract50.so</TargetPath>
-        </ContentWithTargetPath>
         
         <None Remove="RuntimeDep\runtime-x64\tesseract50.dll" />
-        <ContentWithTargetPath Include="RuntimeDep\runtime-x64\tesseract50.dll">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-            <TargetPath>x64\tesseract50.dll</TargetPath>
-        </ContentWithTargetPath>
     </ItemGroup>
 
     <ItemGroup>

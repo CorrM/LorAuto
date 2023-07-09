@@ -1,28 +1,41 @@
-﻿using System.Drawing;
-using Tesseract;
+﻿using Emgu.CV;
+using Emgu.CV.OCR;
+using Emgu.CV.Structure;
 
 namespace LorAuto.OCR;
 
 public sealed class OcrManager : IDisposable
 {
-    private readonly TesseractEngine _engine;
-    
+    private readonly Tesseract _engine;
+
     public OcrManager(string dataPath, string lang)
     {
-        _engine = new TesseractEngine(dataPath, lang, EngineMode.Default);
+        _engine = new Tesseract(dataPath, lang, OcrEngineMode.Default);
+        _engine.PageSegMode = PageSegMode.SingleWord;
+        
+        _engine.SetVariable("debug_file", "NUL");
+        _engine.SetVariable("tessedit_char_whitelist", "0123456789"); // Only recognize digits
     }
 
-    public (string, float) GetText(Bitmap img, Rectangle? region)
+    public (int Number, float MeanConfidence) ReadNumber(Image<Gray, byte> img, bool printText = false)
     {
-        //new Bitmap(Path.Combine(Environment.CurrentDirectory, "TessData", "phototest.tif"));
-        using Page page = region is null
-            ? _engine.Process(img)
-            : _engine.Process(img, new Rect(region.Value.X, region.Value.Y, region.Value.Width, region.Value.Height));
+        _engine.SetImage(img);
+        _engine.Recognize();
         
-        string text = page.GetText();
-        return (text, page.GetMeanConfidence());
+        string text = _engine.GetUTF8Text().Trim();
+        if (printText)
+            Console.WriteLine(text);
+        
+        Tesseract.Character[] characters = _engine.GetCharacters();
+        int characterCount = characters.Length;
+        float totalConfidence = characters.Sum(c => c.Cost);
+        float meanConfidence = totalConfidence / characterCount;
+
+        return int.TryParse(text, out int number)
+            ? (number, meanConfidence)
+            : (-1, 0);
     }
-    
+
     public void Dispose()
     {
         _engine.Dispose();

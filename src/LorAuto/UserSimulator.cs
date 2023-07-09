@@ -86,7 +86,7 @@ public sealed class UserSimulator
         ForegroundIfGameNot();
         
         int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-        int cy = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y;
+        int cy = _stateMachine.WindowLocation.Y + card.TopCenterPos.Y;
 
         _input.Mouse.MoveMouseSmooth(cx, cy)
             .LeftButtonClick();
@@ -97,7 +97,7 @@ public sealed class UserSimulator
         ForegroundIfGameNot();
 
         int x = _stateMachine.WindowLocation.X + handCard.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - handCard.TopCenterPos.Y;
+        int y = _stateMachine.WindowLocation.Y + handCard.TopCenterPos.Y;
 
         _input.Mouse.MoveMouseSmooth(x, y)
             .Sleep(500) // Wait for the card maximize animation
@@ -123,7 +123,7 @@ public sealed class UserSimulator
         ForegroundIfGameNot();
 
         int x = _stateMachine.WindowLocation.X + boardCard.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - boardCard.TopCenterPos.Y;
+        int y = _stateMachine.WindowLocation.Y + boardCard.TopCenterPos.Y;
         
         _input.Mouse.MoveMouseSmooth(x, y)
             .Sleep(40)
@@ -137,8 +137,8 @@ public sealed class UserSimulator
 
     public void BlockCard(InGameCard card, InGameCard cardToBeBlocked)
     {
-        (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - card.TopCenterPos.Y);
-        (int, int) posDest = (_stateMachine.WindowLocation.X + cardToBeBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + _stateMachine.WindowSize.Height - cardToBeBlocked.TopCenterPos.Y);
+        (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + card.TopCenterPos.Y);
+        (int, int) posDest = (_stateMachine.WindowLocation.X + cardToBeBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + cardToBeBlocked.TopCenterPos.Y);
 
         ForegroundIfGameNot();
         

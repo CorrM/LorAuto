@@ -50,21 +50,8 @@ public sealed class BotOverlay : IDisposable
             _windowGfx.DrawRectangle(gBrush, sRect.ToGRect(), 1.0f);
     }
 
-    private void DrawCard(SolidBrush gBrush)
+    private void DrawCard(SolidBrush gBrush, InGameCard card)
     {
-        if (_stateMachine.CardsOnBoard.CardsAttackOrBlock.Count == 0)
-            return;
-
-        InGameCard card;
-        try
-        {
-            card = _stateMachine.CardsOnBoard.CardsAttackOrBlock[0];
-        }
-        catch
-        {
-            return;
-        }
-
         if (card.Type is GameCardType.Spell or GameCardType.Ability)
             return;
 
@@ -72,7 +59,7 @@ public sealed class BotOverlay : IDisposable
         using SolidBrush bBrush = _windowGfx.CreateSolidBrush(0, 0, 255);
         
         int x = card.Position.X;
-        int y = _stateMachine.WindowSize.Height - card.Position.Y;
+        int y = card.Position.Y;
 
         _windowGfx.DrawRectangle(
             gBrush,
@@ -82,34 +69,34 @@ public sealed class BotOverlay : IDisposable
             y + card.Size.Height,
             2.0f);
 
-        _windowGfx.DrawRectangle(
-            rBrush,
-            x,
-            y,
-            x + (card.Size.Width / 2.0f),
-            y + (card.Size.Height / 4.0f),
-            1.0f);
-
-        _windowGfx.DrawRectangle(
-            bBrush,
-            x + (card.Size.Width / 2.0f),
-            y,
-            x + card.Size.Width,
-            y + (card.Size.Height / 4.0f),
-            1.0f);
+        (Rectangle power, Rectangle health) = _stateMachine.ComponentLocator.GetCardAttackAndHealthRect(card);
+        _windowGfx.DrawRectangle(bBrush, power.ToGRect(), 1.0f);
+        _windowGfx.DrawRectangle(bBrush, health.ToGRect(), 1.0f);
     }
 
     private void Window_DrawGraphics(object? sender, DrawGraphicsEventArgs e)
     {
-        using SolidBrush gBrush = _windowGfx.CreateSolidBrush(0, 255, 0);
-
         _windowGfx.ClearScene();
 
-        if (_stateMachine.GameState is not (EGameState.Menus or EGameState.End))
+        using SolidBrush gBrush = _windowGfx.CreateSolidBrush(0, 255, 0);
+        
+        if (_stateMachine.GameState is not (EGameState.Menus or EGameState.MenusDeckSelected or EGameState.End))
         {
             DrawSpellMana(gBrush);
-            DrawCard(gBrush);
-            
+
+            for (int i = 0; i < _stateMachine.CardsOnBoard.AllCards.Count; i++)
+            {
+                try
+                {
+                    InGameCard card = _stateMachine.CardsOnBoard.AllCards[i];
+                    DrawCard(gBrush, card);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+
             Rectangle roundsLogRect = _stateMachine.ComponentLocator.GetRoundsLogRect();
             _windowGfx.DrawRectangle(gBrush, roundsLogRect.ToGRect(), 1.0f);
         }
