@@ -17,10 +17,10 @@ jobs:
         with:
           dotnet-version: '7.0.x'
       - name: Install dependencies
-        run: dotnet restore
+        run: dotnet restore -r win-x64
         
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build -c Release -r win-x64 --no-restore
         
       - name: dotnet publish
         run: |
