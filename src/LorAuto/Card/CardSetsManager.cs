@@ -9,7 +9,7 @@ namespace LorAuto.Client;
 public sealed class CardSetsManager
 {
     private readonly static HttpClient _httpClient;
-    
+
     private readonly string[] _forbiddenCardSets = { "set6ab" };
     private readonly string _cardSetsDirName;
 
@@ -21,9 +21,9 @@ public sealed class CardSetsManager
         _httpClient = new HttpClient()
         {
             BaseAddress = new Uri("https://dd.b.pvp.net/latest/")
-        }; 
+        };
     }
-    
+
     public CardSetsManager(string cardSetsDirName)
     {
         _cardSetsDirName = cardSetsDirName;
@@ -86,7 +86,7 @@ public sealed class CardSetsManager
             Cards = cardsInSet
         };
     }
-    
+
     public string[] GetExistsCardSetsNames()
     {
         string cardSetsBasePath = GetCardSetsPath();
@@ -95,7 +95,7 @@ public sealed class CardSetsManager
             .Select(s => Path.GetFileNameWithoutExtension(s)!)
             .ToArray();
     }
-    
+
     public async Task DownloadMissingCardSetsAsync(CancellationToken ct = default)
     {
         string cardSetsBasePath = GetCardSetsPath();
@@ -107,7 +107,7 @@ public sealed class CardSetsManager
         {
             coreBundlesBytes = await _httpClient.GetByteArrayAsync("core-en_us.zip", ct).ConfigureAwait(false);
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return;
         }
@@ -173,13 +173,13 @@ public sealed class CardSetsManager
         // Clear old data
         CardSetsLoaded = false;
         CardSets.Clear();
-        
+
         // Load card sets
         foreach (string cardSetName in GetExistsCardSetsNames())
         {
             if (ct.IsCancellationRequested)
                 throw new TaskCanceledException();
-            
+
             GameCardSet cardSet = await ParseCardSetCardsAsync(cardSetName, ct).ConfigureAwait(false);
             CardSets.Add(cardSetName, cardSet);
         }

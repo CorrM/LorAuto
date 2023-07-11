@@ -56,7 +56,6 @@ public sealed class BotCommand : RootCommand
 
         // # Game info and data
         using var stateMachine = new StateMachine(cardSetsManager);
-
         stateMachine.UpdateClientInfo();
 
         if (stateMachine.GameWindowHandle == IntPtr.Zero)
@@ -69,15 +68,17 @@ public sealed class BotCommand : RootCommand
         BotOverlay? overlay = null;
         if (showOverlay)
         {
-            Log.Logger.Information("Overlay starts");
             overlay = new BotOverlay(stateMachine);
+
+            Log.Logger.Information("Overlay starts");
             overlay.Start();
         }
 
         // # BOT
-        Log.Logger.Information("Bot starts");
         using ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
         ILogger<LorBot> botLogger = loggerFactory.CreateLogger<LorBot>();
+
+        Log.Logger.Information("Bot starts");
         var bot = new LorBot(stateMachine, new GenericStrategy(), gameRotation, isPvpGame, botLogger);
 
         while (!ct.IsCancellationRequested)
@@ -88,7 +89,7 @@ public sealed class BotCommand : RootCommand
                 await bot.ProcessAsync(ct).ConfigureAwait(false);
                 await Task.Delay(8, ct).ConfigureAwait(false);
             }
-            catch (TaskCanceledException e)
+            catch (TaskCanceledException)
             {
             }
         }
