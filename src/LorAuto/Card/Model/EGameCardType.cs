@@ -1,6 +1,6 @@
 ﻿namespace LorAuto.Card.Model;
 
-public enum GameCardType
+public enum EGameCardType
 {
     Spell,
     Unit,

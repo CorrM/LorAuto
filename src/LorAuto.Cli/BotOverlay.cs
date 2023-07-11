@@ -52,7 +52,7 @@ public sealed class BotOverlay : IDisposable
 
     private void DrawCard(SolidBrush gBrush, InGameCard card)
     {
-        if (card.Type is GameCardType.Spell or GameCardType.Ability)
+        if (card.Type is EGameCardType.Spell or EGameCardType.Ability)
             return;
 
         using SolidBrush rBrush = _windowGfx.CreateSolidBrush(255, 0, 0);

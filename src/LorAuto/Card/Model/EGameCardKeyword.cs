@@ -1,6 +1,6 @@
 ﻿namespace LorAuto.Card.Model;
 
-public enum GameCardKeyword
+public enum EGameCardKeyword
 {
     Burst,
     QuickStrike,

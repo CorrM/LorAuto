@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 using System.Reflection;
 using LorAuto.Client.Model;
+using LorAuto.Game.Model;
 
 namespace LorAuto.Card.Model;
 
@@ -14,30 +15,32 @@ namespace LorAuto.Card.Model;
 public sealed class InGameCard : GameCard, IEquatable<InGameCard>
 {
     public int CardID { get; }
+    public EInGameCardPosition InGamePosition { get; private set; }
     public Point Position { get; private set; }
     public Size Size { get; private set; }
     public Point TopCenterPos { get; private set; }
     public Point BottomCenterPos { get; private set; }
     public bool IsLocalPlayer { get; private set; }
 
-    public InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize)
+    public InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
     {
-        // Using reflection is better than not forgetting to copy any property
+        // Using reflection is better than forgetting to copy any property
         PropertyInfo[] propertyInfos = typeof(GameCard).GetProperties(BindingFlags.Instance | BindingFlags.Public);
         foreach (PropertyInfo info in propertyInfos)
             info.SetValue(this, info.GetValue(otherCard));
 
         CardID = rectCard.CardID;
-        UpdatePosition(rectCard, windowSize);
+        UpdatePosition(rectCard, windowSize, inGamePosition);
     }
     
-    public void UpdatePosition(GameClientRectangle rectCard, Size windowSize)
+    public void UpdatePosition(GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
     {
         if (CardID != rectCard.CardID)
             throw new Exception($"Current card and {nameof(rectCard)} not identical.");
         
         int y = windowSize.Height - rectCard.TopLeftY;
-        
+
+        InGamePosition = inGamePosition;
         Position = new Point(rectCard.TopLeftX, y);
         Size = new Size(rectCard.Width, rectCard.Height);
         TopCenterPos = new Point(rectCard.TopLeftX + (rectCard.Width / 2), y);

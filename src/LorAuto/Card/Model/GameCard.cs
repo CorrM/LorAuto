@@ -10,8 +10,8 @@ public class GameCard
     public int Cost { get; protected set; }
     public int Attack { get; protected set; }
     public int Health { get; protected set; }
-    public GameCardType Type { get; protected set; }
-    public GameCardKeyword[] Keywords { get; protected set; } = null!;
+    public EGameCardType Type { get; protected set; }
+    public EGameCardKeyword[] Keywords { get; protected set; } = null!;
     public string Description { get; protected set; } = null!;
 
     public static GameCard FromJson(JsonNode json)
@@ -23,8 +23,8 @@ public class GameCard
             Cost = json["cost"]!.GetValue<int>(),
             Attack = json["attack"]!.GetValue<int>(),
             Health = json["health"]!.GetValue<int>(),
-            Type = Enum.Parse<GameCardType>(json["type"]!.GetValue<string>()),
-            Keywords = json["keywordRefs"]!.AsArray().Select(j => Enum.Parse<GameCardKeyword>(j!.GetValue<string>())).ToArray(),
+            Type = Enum.Parse<EGameCardType>(json["type"]!.GetValue<string>()),
+            Keywords = json["keywordRefs"]!.AsArray().Select(j => Enum.Parse<EGameCardKeyword>(j!.GetValue<string>())).ToArray(),
             Description = json["descriptionRaw"]!.GetValue<string>(),
         };
     }

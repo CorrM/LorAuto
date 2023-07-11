@@ -4,11 +4,11 @@ using Emgu.CV.Structure;
 
 namespace LorAuto.OCR;
 
-public sealed class OcrManager : IDisposable
+public sealed class OcrHelper : IDisposable
 {
     private readonly Tesseract _engine;
 
-    public OcrManager(string dataPath, string lang)
+    public OcrHelper(string dataPath, string lang)
     {
         _engine = new Tesseract(dataPath, lang, OcrEngineMode.Default);
         _engine.PageSegMode = PageSegMode.SingleWord;

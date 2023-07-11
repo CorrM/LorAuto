@@ -4,6 +4,8 @@
         <TargetFramework>net7.0-windows</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AssemblyVersion>0.0.1</AssemblyVersion>
+        <FileVersion>0.0.1</FileVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -33,6 +35,8 @@
         <None Remove="RuntimeDep\runtime-x64\libtesseract50.so" />
         
         <None Remove="RuntimeDep\runtime-x64\tesseract50.dll" />
+        
+        <None Remove="HsvTunner.py" />
     </ItemGroup>
 
     <ItemGroup>

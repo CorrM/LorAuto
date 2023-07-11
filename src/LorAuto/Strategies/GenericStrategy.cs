@@ -4,7 +4,7 @@ using LorAuto.Strategies.Model;
 
 namespace LorAuto.Strategies;
 
-public sealed class Generic : Strategy
+public sealed class GenericStrategy : Strategy
 {
     public override IEnumerable<InGameCard> Mulligan(IEnumerable<InGameCard> mulliganCards)
     {
@@ -13,7 +13,7 @@ public sealed class Generic : Strategy
     
     public override (InGameCard HandCard, List<InGameCard?>? Targets)? PlayHandCard(BoardCards boardCards, EGameState gameState, int mana, int spellMana, IEnumerable<InGameCard> playableHandCards)
     {
-        InGameCard? cardToPlay = playableHandCards.Where(c => c.Type is not (GameCardType.Ability or GameCardType.Spell))
+        InGameCard? cardToPlay = playableHandCards.Where(c => c.Type is not (EGameCardType.Ability or EGameCardType.Spell))
             .Where(c => c.Cost <= mana)
             .MaxBy(c => c.Attack);
         
@@ -54,13 +54,13 @@ public sealed class Generic : Strategy
                     continue;
                 }
 
-                if (opponent.Keywords.Contains(GameCardKeyword.Elusive) && !myCard.Keywords.Contains(GameCardKeyword.Elusive))
+                if (opponent.Keywords.Contains(EGameCardKeyword.Elusive) && !myCard.Keywords.Contains(EGameCardKeyword.Elusive))
                     continue;
 
-                if (opponent.Keywords.Contains(GameCardKeyword.Fearsome) && myCard.Attack < 3)
+                if (opponent.Keywords.Contains(EGameCardKeyword.Fearsome) && myCard.Attack < 3)
                     continue;
 
-                if (myCard.Keywords.Contains(GameCardKeyword.CantBlock))
+                if (myCard.Keywords.Contains(EGameCardKeyword.CantBlock))
                     continue;
 
                 ret.Add(myCard, opponent);

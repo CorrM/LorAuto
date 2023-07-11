@@ -1,17 +1,12 @@
-﻿using LorAuto.Card.Model;
+﻿using LorAuto.Bot.Model;
+using LorAuto.Card.Model;
 using LorAuto.Client.Model;
 using LorAuto.Game;
 using LorAuto.Strategies;
 using LorAuto.Strategies.Model;
 using Microsoft.Extensions.Logging;
 
-namespace LorAuto;
-
-public enum GameRotationType
-{
-    Standard,
-    Eternal
-}
+namespace LorAuto.Bot;
 
 internal class BotCurrentGameState
 {
@@ -30,7 +25,7 @@ internal class BotCurrentGameState
 /// <summary>
 /// Plays the game, responsible for executing commands from <see cref="Strategy"/>
 /// </summary>
-public sealed class Bot
+public sealed class LorBot
 {
     /*
      NOTES:
@@ -38,17 +33,17 @@ public sealed class Bot
     */
     private readonly StateMachine _stateMachine;
     private readonly Strategy _strategy;
-    private readonly GameRotationType _gameRotationType;
+    private readonly EGameRotation _gameRotation;
     private readonly bool _isPvp;
     private readonly ILogger? _logger;
     private readonly BotCurrentGameState _currentGameState;
     private readonly UserSimulator _userSimulator;
 
-    public Bot(StateMachine stateMachine, Strategy strategy, GameRotationType gameRotationType, bool isPvp, ILogger? logger)
+    public LorBot(StateMachine stateMachine, Strategy strategy, EGameRotation gameRotation, bool isPvp, ILogger? logger)
     {
         _stateMachine = stateMachine;
         _strategy = strategy;
-        _gameRotationType = gameRotationType;
+        _gameRotation = gameRotation;
         _isPvp = isPvp;
         _logger = logger;
 
@@ -163,7 +158,7 @@ public sealed class Bot
     private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
     {
         // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
-        if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is GameCardType.Spell or GameCardType.Ability))
+        if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is EGameCardType.Spell or EGameCardType.Ability))
         {
             // Double check to avoid False Positives
             if (!_currentGameState.FirstPassBlocking)
@@ -203,7 +198,7 @@ public sealed class Bot
         }
 
         List<InGameCard> playableCards = _stateMachine.CardsOnBoard.CardsHand
-            .Where(card => card.Cost <= _stateMachine.Mana || (card.Type == GameCardType.Spell && card.Cost <= _stateMachine.Mana + _stateMachine.SpellMana))
+            .Where(card => card.Cost <= _stateMachine.Mana || (card.Type == EGameCardType.Spell && card.Cost <= _stateMachine.Mana + _stateMachine.SpellMana))
             .OrderByDescending(card => card.Cost)
             .ToList();
 
@@ -281,12 +276,12 @@ public sealed class Bot
                 break;
             
             case EGameState.Menus:
-                _userSimulator.SelectDeck(_gameRotationType, _isPvp);
+                _userSimulator.SelectDeck(_gameRotation, _isPvp);
                 // TODO: Add a way to detect 'EGameState.SearchGame' so this statement doesnt get called more than once
                 break;
             
             case EGameState.MenusDeckSelected:
-                _userSimulator.SelectDeck(_gameRotationType, _isPvp);
+                _userSimulator.SelectDeck(_gameRotation, _isPvp);
                 break;
 
             case EGameState.SearchGame:

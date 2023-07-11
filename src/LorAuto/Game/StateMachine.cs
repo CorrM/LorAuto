@@ -20,11 +20,11 @@ namespace LorAuto.Game;
 /// <summary>
 /// Determines the game state and cards on board by using the LoR API and cv2 functionality
 /// </summary>
-public sealed class StateMachine
+public sealed class StateMachine : IDisposable
 {
     private readonly CardSetsManager _cardSetsManager;
+    private readonly OcrHelper _ocrHelper;
     private readonly GameClientApi _gameClientApi;
-    private readonly OcrManager _ocrManager;
     private readonly byte[][][] _manaMasks;
     private readonly int[] _numPxMask;
 
@@ -46,11 +46,11 @@ public sealed class StateMachine
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
-    public StateMachine(CardSetsManager cardSetsManager, GameClientApi gameClientApi, OcrManager ocrManager)
+    public StateMachine(CardSetsManager cardSetsManager)
     {
         _cardSetsManager = cardSetsManager;
-        _gameClientApi = gameClientApi;
-        _ocrManager = ocrManager;
+        _ocrHelper = new OcrHelper(@"./TessData", "eng");
+        _gameClientApi = new GameClientApi();
         _manaMasks = new byte[][][]
         {
             Constants.Zero, Constants.One, Constants.Two, Constants.Three, Constants.Four,
@@ -105,6 +105,33 @@ public sealed class StateMachine
         return hWindow == GameWindowHandle;
     }
 
+    private Image<Bgr, byte>[] GetFrames()
+    {
+        const int framesCount = 4;
+        (Point loc, Size size) = GetWindowRectInfo();
+        var frames = new Image<Bgr, byte>[framesCount];
+
+        using User32.SafeDCHandle hdcScreen = User32.GetDC(IntPtr.Zero);
+        using User32.SafeDCHandle hdc = Gdi32.CreateCompatibleDC(hdcScreen);
+
+        IntPtr hBitmap = Gdi32.CreateCompatibleBitmap(hdcScreen, size.Width, size.Height);
+        Gdi32.SelectObject(hdc, hBitmap);
+
+        for (int i = 0; i < framesCount; i++)
+        {
+            Gdi32.BitBlt(hdc, 0, 0, size.Width, size.Height, hdcScreen, loc.X, loc.Y, 0xCC0020);
+
+            using Bitmap bitmap = Image.FromHbitmap(hBitmap);
+            frames[i] = bitmap.ToImage<Bgr, byte>();
+
+            Thread.Sleep(8);
+        }
+
+        Gdi32.DeleteObject(hBitmap);
+
+        return frames;
+    }
+
     private async Task<GameResultApiResponse?> GetGameResultAsync(CancellationToken ct = default)
     {
         (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync(ct).ConfigureAwait(false);
@@ -140,10 +167,12 @@ public sealed class StateMachine
             ActiveDeck.CardsInDeck.Add(cardCode, cardCount);
     }
 
-    private EInGameCardPosition GetCardPosition(InGameCard card, GameClientRectangle rectCard)
+    private EInGameCardPosition GetCardPosition(GameClientRectangle rectCard)
     {
         var cardPosition = EInGameCardPosition.None;
-        float yRatio = card.Position.Y / (float)WindowSize.Height;
+        int y = WindowSize.Height - rectCard.TopLeftY;
+        float yRatio = y / (float)WindowSize.Height;
+        
         if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
             cardPosition = EInGameCardPosition.Mulligan;
 
@@ -219,11 +248,11 @@ public sealed class StateMachine
             (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
         };
-        
+
         (int Number, float Confidence) ReadNumberFromImage(Image<Bgr, byte> img)
         {
             var ret = new List<(int Num, float Confidence)>();
-            
+
             foreach ((Hsv lower, Hsv higher) in colors)
             {
                 using Image<Gray, byte> inRangeImg = img.InHsvRange(lower, higher);
@@ -232,14 +261,14 @@ public sealed class StateMachine
                     continue;
 
                 using Image<Gray, byte> resizeImg = inRangeImg.Resize(120, 120, Inter.Linear);
-                (int number, float confidence) = _ocrManager.ReadNumber(resizeImg);
-                
+                (int number, float confidence) = _ocrHelper.ReadNumber(resizeImg);
+
                 if (number == -1)
                     continue;
 
                 ret.Add((number, confidence));
             }
-            
+
             return ret.Count > 0 ? ret.MaxBy(x => x.Confidence) : (-1, 0);
         }
 
@@ -249,9 +278,9 @@ public sealed class StateMachine
         // Attack
         using Image<Bgr, byte> attackCropImg = image.Crop(attackRect);
         (int attackNumber, float attackConfidence) = ReadNumberFromImage(attackCropImg);
-        
-        Console.WriteLine($"Card ({card.Name}), ATTACK: {attackNumber}, Confidence: {attackConfidence}");
-        
+
+        //Console.WriteLine($"Card ({card.Name}), ATTACK: {attackNumber}, Confidence: {attackConfidence}");
+
         if (attackNumber == -1)
         {
             // CvInvoke.Imshow("attackNumber", attackRangeImg);
@@ -263,9 +292,9 @@ public sealed class StateMachine
         // Health
         using Image<Bgr, byte> hpCropImg = image.Crop(healthRect);
         (int hpNumber, float hpConfidence) = ReadNumberFromImage(hpCropImg);
-        
-        Console.WriteLine($"Card ({card.Name}), HEALTH: {hpNumber}, Confidence: {hpConfidence}");
-        
+
+        // Console.WriteLine($"Card ({card.Name}), HEALTH: {hpNumber}, Confidence: {hpConfidence}");
+
         if (hpNumber == -1) // Number 5 not work
         {
             // CvInvoke.Imshow("attackNumber", hpCropImg);
@@ -279,7 +308,7 @@ public sealed class StateMachine
 
     private async Task UpdateCardsOnBoardAsync(Image<Bgr, byte>[] frames, CancellationToken ct = default)
     {
-        // Store cards references so we can update the card data but in same card instance
+        // Store cards references so we can update the card data in-place
         List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
 
         // Clear board state before update
@@ -292,12 +321,13 @@ public sealed class StateMachine
 
         foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
         {
-            InGameCard inGameCard;
-            InGameCard? toUpdate = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
-            if (toUpdate is not null)
+            EInGameCardPosition cardPosition = GetCardPosition(rectCard);
+            
+            // Get card
+            InGameCard? inGameCard = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
+            if (inGameCard is not null)
             {
-                toUpdate.UpdatePosition(rectCard, WindowSize);
-                inGameCard = toUpdate;
+                inGameCard.UpdatePosition(rectCard, WindowSize, cardPosition);
             }
             else
             {
@@ -308,52 +338,25 @@ public sealed class StateMachine
                     throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found. (Delete card sets folder may solve the problem)");
                 }
 
-                GameCard cardSetCard = gameCardSet.Cards[rectCard.CardCode];
-                inGameCard = new InGameCard(cardSetCard, rectCard, WindowSize);
+                inGameCard = new InGameCard(gameCardSet.Cards[rectCard.CardCode], rectCard, WindowSize, cardPosition);
             }
 
-            EInGameCardPosition cardPosition = GetCardPosition(inGameCard, rectCard);
             StoreCard(inGameCard, cardPosition);
 
-            if (cardPosition is EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock)
-                UpdatePlayableCardAttackHealth(inGameCard, frames);
-
-            // Update hand card cost
-            if (cardPosition == EInGameCardPosition.Hand)
+            switch (cardPosition)
             {
-                // TODO: Update hand card cost
+                case EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock:
+                    UpdatePlayableCardAttackHealth(inGameCard, frames);
+                    break;
+                
+                case EInGameCardPosition.Hand: // Update hand card cost
+                    // TODO: Update hand card cost
+                    break;
             }
         }
 
         // Some times opponent attacking cards are right to left
         CardsOnBoard.Sort();
-    }
-
-    private Image<Bgr, byte>[] GetFrames()
-    {
-        const int framesCount = 4;
-        (Point loc, Size size) = GetWindowRectInfo();
-        var frames = new Image<Bgr, byte>[framesCount];
-
-        using User32.SafeDCHandle hdcScreen = User32.GetDC(IntPtr.Zero);
-        using User32.SafeDCHandle hdc = Gdi32.CreateCompatibleDC(hdcScreen);
-
-        IntPtr hBitmap = Gdi32.CreateCompatibleBitmap(hdcScreen, size.Width, size.Height);
-        Gdi32.SelectObject(hdc, hBitmap);
-
-        for (int i = 0; i < framesCount; i++)
-        {
-            Gdi32.BitBlt(hdc, 0, 0, size.Width, size.Height, hdcScreen, loc.X, loc.Y, 0xCC0020);
-
-            using Bitmap bitmap = Image.FromHbitmap(hBitmap);
-            frames[i] = bitmap.ToImage<Bgr, byte>();
-
-            Thread.Sleep(8);
-        }
-
-        Gdi32.DeleteObject(hBitmap);
-
-        return frames;
     }
 
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
@@ -395,7 +398,7 @@ public sealed class StateMachine
 
         using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(roundsLogRect);
         int roundsLogPx = roundsLogSubImg.CountNonZeroInHsvRange(new Hsv(20, 80, 130), new Hsv(30, 150, 180));
-        Console.WriteLine($"roundsLogPx: {roundsLogPx}");
+        //Console.WriteLine($"roundsLogPx: {roundsLogPx}");
 
         bool inAction = roundsLogPx > 110 && roundsLogPx < 140; // When block or attack image go darker
         if (!inAction && roundsLogPx < 590)
@@ -436,6 +439,7 @@ public sealed class StateMachine
 
     private int GetMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
     {
+        // TODO: Get raid of that method of getting mana, use same method that used to update in-game card info
         /*
          This code iterates over the frames list and MANA_MASKS array,
          calculates the sum of the edge values based on the mask, and checks if the average exceeds the threshold.
@@ -542,5 +546,11 @@ public sealed class StateMachine
         SpellMana = 0;
         // prev_mana = 0;
         // turn = 0;
+    }
+
+    public void Dispose()
+    {
+        _gameClientApi.Dispose();
+        _ocrHelper.Dispose();
     }
 }

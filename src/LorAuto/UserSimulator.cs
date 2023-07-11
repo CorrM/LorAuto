@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using GregsStack.InputSimulatorStandard;
 using GregsStack.InputSimulatorStandard.Native;
+using LorAuto.Bot.Model;
 using LorAuto.Card.Model;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
@@ -35,14 +36,14 @@ public sealed class UserSimulator
         User32.SetForegroundWindow(_stateMachine.GameWindowHandle);
     }
     
-    public void SelectDeck(GameRotationType gameRotationType, bool isPvp)
+    public void SelectDeck(EGameRotation gameRotation, bool isPvp)
     {
         ForegroundIfGameNot();
 
-        (double, double) gameTypePos = gameRotationType switch
+        (double, double) gameTypePos = gameRotation switch
         {
-            GameRotationType.Standard => (0.70989, 0.05),
-            GameRotationType.Eternal => (0.81970, 0.05),
+            EGameRotation.Standard => (0.70989, 0.05),
+            EGameRotation.Eternal => (0.81970, 0.05),
             _ => throw new UnreachableException()
         };
 
@@ -111,7 +112,7 @@ public sealed class UserSimulator
             .LeftButtonUp();
 
         Thread.Sleep(300);
-        if (handCard.Type != GameCardType.Spell)
+        if (handCard.Type != EGameCardType.Spell)
             return;
 
         Thread.Sleep(1000);

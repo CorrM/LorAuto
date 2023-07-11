@@ -5,7 +5,7 @@ using LorAuto.Client.Model;
 
 namespace LorAuto.Client;
 
-internal enum GameClientApiRequestType
+internal enum EGameClientApiRequestType
 {
     ActiveDeck,
     CardPositions,
@@ -15,7 +15,7 @@ internal enum GameClientApiRequestType
 public sealed class GameClientApi : IDisposable
 {
     private readonly HttpClient _httpClient;
-    private readonly Dictionary<GameClientApiRequestType, string> _requestsMap;
+    private readonly Dictionary<EGameClientApiRequestType, string> _requestsMap;
 
     public GameClientApi(int port = 21337)
     {
@@ -25,15 +25,15 @@ public sealed class GameClientApi : IDisposable
             Timeout = TimeSpan.FromSeconds(10)
         };
         
-        _requestsMap = new Dictionary<GameClientApiRequestType, string>()
+        _requestsMap = new Dictionary<EGameClientApiRequestType, string>()
         {
-            { GameClientApiRequestType.ActiveDeck, "static-decklist" },
-            { GameClientApiRequestType.CardPositions, "positional-rectangles" },
-            { GameClientApiRequestType.GameResult, "game-result" },
+            { EGameClientApiRequestType.ActiveDeck, "static-decklist" },
+            { EGameClientApiRequestType.CardPositions, "positional-rectangles" },
+            { EGameClientApiRequestType.GameResult, "game-result" },
         };
     }
 
-    private async Task<string> GetRequestAsync(GameClientApiRequestType apiRequestType, CancellationToken ct = default)
+    private async Task<string> GetRequestAsync(EGameClientApiRequestType apiRequestType, CancellationToken ct = default)
     {
         return await _httpClient.GetStringAsync(_requestsMap[apiRequestType], ct).ConfigureAwait(false);
     }
@@ -42,7 +42,7 @@ public sealed class GameClientApi : IDisposable
     {
         try
         {
-            string requestData = await GetRequestAsync(GameClientApiRequestType.ActiveDeck, ct).ConfigureAwait(false);
+            string requestData = await GetRequestAsync(EGameClientApiRequestType.ActiveDeck, ct).ConfigureAwait(false);
             var activeDeckJson = JsonSerializer.Deserialize<JsonObject?>(requestData);
 
             if (activeDeckJson is null)
@@ -65,7 +65,7 @@ public sealed class GameClientApi : IDisposable
     {
         try
         {
-            string requestData = await GetRequestAsync(GameClientApiRequestType.CardPositions, ct).ConfigureAwait(false);
+            string requestData = await GetRequestAsync(EGameClientApiRequestType.CardPositions, ct).ConfigureAwait(false);
             var cardPositions = JsonSerializer.Deserialize<CardPositionsApiResponse?>(requestData);
         
             return (cardPositions, null);
@@ -80,7 +80,7 @@ public sealed class GameClientApi : IDisposable
     {
         try
         {
-            string requestData = await GetRequestAsync(GameClientApiRequestType.GameResult, ct).ConfigureAwait(false);
+            string requestData = await GetRequestAsync(EGameClientApiRequestType.GameResult, ct).ConfigureAwait(false);
             var gameResult = JsonSerializer.Deserialize<GameResultApiResponse?>(requestData);
         
             return (gameResult, null);
