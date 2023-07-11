@@ -30,7 +30,6 @@ jobs:
           name: LorAuto
           path: ${{env.DOTNET_ROOT}}/LorAuto
       
-      # Upload
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
