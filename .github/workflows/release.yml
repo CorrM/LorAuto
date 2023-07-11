@@ -35,4 +35,8 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: LorAuto
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
