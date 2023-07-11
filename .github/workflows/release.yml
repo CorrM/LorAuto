@@ -24,7 +24,7 @@ jobs:
         
       - name: dotnet publish
         run: |
-          dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
+          dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo --no-restore -o ${{env.DOTNET_ROOT}}/LorAuto
         
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
