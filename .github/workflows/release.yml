@@ -27,12 +27,12 @@ jobs:
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
         with:
-          name: .net-app
+          name: LorAuto
           path: ${{env.DOTNET_ROOT}}/LorAuto
       
       # Upload
-      #  - name: Upload Release
-      #    uses: ncipollo/release-action@v1
-      #    with:
-      #      artifacts: ${{ github.workspace }}/src/release.zip
-      #      token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: LorAuto
+          token: ${{ secrets.GITHUB_TOKEN }}
