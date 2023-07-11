@@ -18,10 +18,14 @@ jobs:
           dotnet-version: '7.0.x'
       - name: Install dependencies
         run: dotnet restore
+        
       - name: Build
         run: dotnet build --configuration Release --no-restore
+        
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/LorAuto
+        run: |
+          dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
+        
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
         with:
