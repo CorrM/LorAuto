@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using LorAuto.Client;
+﻿using LorAuto.Client;
 
 namespace LorAuto.Test;
 
@@ -20,7 +19,7 @@ public class CardSetsManagerTests : IDisposable
     {
         return Path.Combine(Environment.CurrentDirectory, CARD_SETS_DIR_NAME);
     }
-    
+
     [Fact]
     public async Task DeleteCardSets_WhenCalled_ShouldDeleteCardSetsDirectory()
     {
@@ -49,7 +48,7 @@ public class CardSetsManagerTests : IDisposable
         string[] cardSetFiles = Directory.GetFiles(GetCardSetsBasePath());
         Assert.NotEmpty(cardSetFiles);
     }
-    
+
     public void Dispose()
     {
         // Clean up (delete card sets directory if exists)

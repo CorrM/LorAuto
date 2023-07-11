@@ -1,10 +1,8 @@
 ﻿using System.CommandLine;
-using System.CommandLine.Parsing;
 using LorAuto.Bot;
 using LorAuto.Bot.Model;
 using LorAuto.Client;
 using LorAuto.Game;
-using LorAuto.OCR;
 using LorAuto.Strategies;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -19,18 +17,18 @@ public sealed class BotCommand : RootCommand
         var gameRotationOpt = new Option<EGameRotation>("-r", () => EGameRotation.Standard, "Game rotation to pick.");
         var pvpGameOpt = new Option<bool>("-p", () => true, "Game pvp or AI.");
         var overlayOpt = new Option<bool>("--overlay", () => false, "Show overlay on top of LoR that help to indicate and debug.");
-        
+
         AddOption(gameRotationOpt);
         AddOption(pvpGameOpt);
         AddOption(overlayOpt);
-        
+
         this.SetHandler(async context =>
         {
             EGameRotation gameRotation = context.ParseResult.GetValueForOption(gameRotationOpt);
             bool isPvpGame = context.ParseResult.GetValueForOption(pvpGameOpt);
             bool overlay = context.ParseResult.GetValueForOption(overlayOpt);
             CancellationToken token = context.GetCancellationToken();
-            
+
             context.ExitCode = await CommandHandler(isPvpGame, gameRotation, overlay, token);
         });
     }
