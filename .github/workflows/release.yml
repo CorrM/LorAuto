@@ -15,16 +15,14 @@ jobs:
       - name: Setup .NET Core SDK ${{ matrix.dotnet-version }}
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '7.0.x'
-      - name: Install dependencies
-        run: dotnet restore -r win-x64
-        
+          dotnet-version: '7.x.x'
+
       - name: Build
-        run: dotnet build -c Release -r win-x64 --no-restore
+        run: dotnet build -c Release
         
       - name: dotnet publish
         run: |
-          dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo --no-restore -o ${{env.DOTNET_ROOT}}/LorAuto
+          dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
         
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v2
