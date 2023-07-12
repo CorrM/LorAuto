@@ -11,9 +11,6 @@ using LorAuto.Game.Model;
 using LorAuto.OCR;
 using PInvoke;
 using Constants = LorAuto.Game.Model.Constants;
-using Image = System.Drawing.Image;
-using Point = System.Drawing.Point;
-using Size = System.Drawing.Size;
 
 namespace LorAuto.Game;
 
@@ -46,11 +43,11 @@ public sealed class StateMachine : IDisposable
     public int Mana { get; private set; }
     public int SpellMana { get; private set; }
 
-    public StateMachine(CardSetsManager cardSetsManager)
+    public StateMachine(CardSetsManager cardSetsManager, int gameClientPort)
     {
         _cardSetsManager = cardSetsManager;
         _ocrHelper = new OcrHelper(@"./TessData", "eng");
-        _gameClientApi = new GameClientApi();
+        _gameClientApi = new GameClientApi(gameClientPort);
         _manaMasks = new byte[][][]
         {
             Constants.Zero, Constants.One, Constants.Two, Constants.Three, Constants.Four,
@@ -172,7 +169,7 @@ public sealed class StateMachine : IDisposable
         var cardPosition = EInGameCardPosition.None;
         int y = WindowSize.Height - rectCard.TopLeftY;
         float yRatio = y / (float)WindowSize.Height;
-        
+
         if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
             cardPosition = EInGameCardPosition.Mulligan;
 
@@ -322,7 +319,7 @@ public sealed class StateMachine : IDisposable
         foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
         {
             EInGameCardPosition cardPosition = GetCardPosition(rectCard);
-            
+
             // Get card
             InGameCard? inGameCard = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
             if (inGameCard is not null)
@@ -348,7 +345,7 @@ public sealed class StateMachine : IDisposable
                 case EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock:
                     UpdatePlayableCardAttackHealth(inGameCard, frames);
                     break;
-                
+
                 case EInGameCardPosition.Hand: // Update hand card cost
                     // TODO: Update hand card cost
                     break;
@@ -363,6 +360,9 @@ public sealed class StateMachine : IDisposable
     {
         if (_gameResult is null || _gameData is null)
             throw new UnreachableException();
+
+        if ((User32.GetAsyncKeyState((int)User32.VirtualKey.VK_LCONTROL) & 0x8000) != 0)
+            return EGameState.Hold;
 
         // # Menus
         Image<Bgr, byte> lastFrame = frames.First();

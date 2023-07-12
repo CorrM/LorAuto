@@ -15,25 +15,31 @@ public sealed class BotCommand : RootCommand
     public BotCommand() : base("Bot for Legends of Runeterra")
     {
         var gameRotationOpt = new Option<EGameRotation>("-r", () => EGameRotation.Standard, "Game rotation to pick.");
-        var pvpGameOpt = new Option<bool>("-p", () => true, "Game pvp or AI.");
+        var strategyOpt = new Option<string>("-s", () => "generic", "Strategy bot will use.");
+        var gamePortOpt = new Option<int>("-p", () => 21337, "Game client third party endpoints port.");
+        var pvpGameOpt = new Option<bool>("--pvp", () => true, "Play game against pvp or AI.");
         var overlayOpt = new Option<bool>("--overlay", () => false, "Show overlay on top of LoR that help to indicate and debug.");
 
         AddOption(gameRotationOpt);
+        AddOption(strategyOpt);
+        AddOption(gamePortOpt);
         AddOption(pvpGameOpt);
         AddOption(overlayOpt);
 
         this.SetHandler(async context =>
         {
             EGameRotation gameRotation = context.ParseResult.GetValueForOption(gameRotationOpt);
+            string strategy = context.ParseResult.GetValueForOption(strategyOpt)!;
+            int gamePort = context.ParseResult.GetValueForOption(gamePortOpt);
             bool isPvpGame = context.ParseResult.GetValueForOption(pvpGameOpt);
             bool overlay = context.ParseResult.GetValueForOption(overlayOpt);
             CancellationToken token = context.GetCancellationToken();
 
-            context.ExitCode = await CommandHandler(isPvpGame, gameRotation, overlay, token);
+            context.ExitCode = await CommandHandler(gameRotation, strategy, gamePort, isPvpGame, overlay, token);
         });
     }
 
-    private async Task<int> CommandHandler(bool isPvpGame, EGameRotation gameRotation, bool showOverlay, CancellationToken ct)
+    private async Task<int> CommandHandler(EGameRotation gameRotation, string strategy, int gamePort, bool isPvpGame, bool showOverlay, CancellationToken ct)
     {
         // # Logger
         Log.Logger = new LoggerConfiguration()
@@ -55,7 +61,7 @@ public sealed class BotCommand : RootCommand
         Log.Logger.Information("Loading card sets finished");
 
         // # Game info and data
-        using var stateMachine = new StateMachine(cardSetsManager);
+        using var stateMachine = new StateMachine(cardSetsManager, gamePort);
         stateMachine.UpdateClientInfo();
 
         if (stateMachine.GameWindowHandle == IntPtr.Zero)
@@ -78,9 +84,15 @@ public sealed class BotCommand : RootCommand
         using ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
         ILogger<LorBot> botLogger = loggerFactory.CreateLogger<LorBot>();
 
-        Log.Logger.Information("Bot starts");
-        var bot = new LorBot(stateMachine, new GenericStrategy(), gameRotation, isPvpGame, botLogger);
+        Type strategyType = typeof(Strategy);
+        Type? strategyToUse = typeof(Strategy).Assembly.GetTypes()
+            .Where(t => t.IsAssignableTo(strategyType) && t != strategyType)
+            .FirstOrDefault(t => string.Equals(t.Name, strategy, StringComparison.CurrentCultureIgnoreCase) || string.Equals(t.Name, $"{strategy}Strategy", StringComparison.CurrentCultureIgnoreCase));
+        if (strategyToUse is null)
+            throw new Exception($"Strategy '{strategy}' not found.");
 
+        Log.Logger.Information("Bot start using '{Strategy}'", strategyToUse.Name);
+        var bot = new LorBot(stateMachine, (Strategy)Activator.CreateInstance(strategyToUse)!, gameRotation, isPvpGame, botLogger);
         while (!ct.IsCancellationRequested)
         {
             //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();

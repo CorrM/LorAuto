@@ -21,7 +21,7 @@ public sealed class UserSimulator
     {
         _stateMachine = stateMachine;
         _input = new InputSimulator();
-        
+
         _selectDeckAi = new (double, double)[] { (0.04721, 0.33454), (0.15738, 0.33401), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538) };
         _selectDeckPvp = new (double, double)[] { (0.04721, 0.33454), (0.15738, 0.25), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538) };
     }
@@ -32,10 +32,10 @@ public sealed class UserSimulator
 
         if (_stateMachine.GameIsForeground)
             return;
-        
+
         User32.SetForegroundWindow(_stateMachine.GameWindowHandle);
     }
-    
+
     public void SelectDeck(EGameRotation gameRotation, bool isPvp)
     {
         ForegroundIfGameNot();
@@ -81,18 +81,18 @@ public sealed class UserSimulator
         _input.Mouse.MoveMouseSmooth((int)okButtonPos.Item1, (int)okButtonPos.Item2)
             .LeftButtonClick();
     }
-    
+
     public void ClickCard(InGameCard card)
     {
         ForegroundIfGameNot();
-        
+
         int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
         int cy = _stateMachine.WindowLocation.Y + card.TopCenterPos.Y;
 
         _input.Mouse.MoveMouseSmooth(cx, cy)
             .LeftButtonClick();
     }
-    
+
     public void PlayCardFromHand(InGameCard handCard)
     {
         ForegroundIfGameNot();
@@ -101,17 +101,15 @@ public sealed class UserSimulator
         int y = _stateMachine.WindowLocation.Y + handCard.TopCenterPos.Y;
 
         _input.Mouse.MoveMouseSmooth(x, y)
-            .Sleep(500) // Wait for the card maximize animation
+            .Sleep(40)
             .LeftButtonDown();
 
         int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
-        _input.Mouse.MoveMouseSmooth(x, newY);
-        Thread.Sleep(300);
-
         _input.Mouse.MoveMouseSmooth(x, newY)
+            .Sleep(40)
             .LeftButtonUp();
 
-        Thread.Sleep(300);
+        Thread.Sleep(500); // Wait for the card maximize animation
         if (handCard.Type != EGameCardType.Spell)
             return;
 
@@ -125,24 +123,24 @@ public sealed class UserSimulator
 
         int x = _stateMachine.WindowLocation.X + boardCard.TopCenterPos.X;
         int y = _stateMachine.WindowLocation.Y + boardCard.TopCenterPos.Y;
-        
+
         _input.Mouse.MoveMouseSmooth(x, y)
             .Sleep(40)
             .LeftButtonDown();
-        
+
         int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
         _input.Mouse.MoveMouseSmooth(x, newY)
             .Sleep(40)
             .LeftButtonUp();
     }
 
-    public void BlockCard(InGameCard card, InGameCard cardToBeBlocked)
+    public void BlockCard(InGameCard card, InGameCard opponentBlocked)
     {
         (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + card.TopCenterPos.Y);
-        (int, int) posDest = (_stateMachine.WindowLocation.X + cardToBeBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + cardToBeBlocked.TopCenterPos.Y);
+        (int, int) posDest = (_stateMachine.WindowLocation.X + opponentBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + opponentBlocked.TopCenterPos.Y);
 
         ForegroundIfGameNot();
-        
+
         _input.Mouse.MoveMouseSmooth(posSrc.Item1, posSrc.Item2)
             .LeftButtonDown()
             .MoveMouseSmooth(posDest.Item1, posDest.Item2)
@@ -152,41 +150,37 @@ public sealed class UserSimulator
     public void CommitOrPassOrSkipTurn()
     {
         ForegroundIfGameNot();
-        
+
         Thread.Sleep(Random.Shared.Next(400, 600));
-        
+
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
     }
-    
+
     public void GameEndContinueAndReplay()
     {
-        Thread.Sleep(4000);
-        
         double continueBtnPosX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.66);
         double continueBtnPosY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.90);
 
         for (int i = 0; i < 16; i++)
         {
             ForegroundIfGameNot();
-            
+
             _stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
             if (_stateMachine.GameState == EGameState.MenusDeckSelected)
                 break;
-            
+
             _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY)
                 .LeftButtonClick();
-            
+
             Thread.Sleep(1500);
         }
-
-        Thread.Sleep(1000);
     }
 
     public void ResetMousePosition()
     {
-        double mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.5);
-        double mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.5);
-        
+        double mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.1041);
+        double mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.7592);
+
         _input.Mouse.MoveMouseSmooth(mouseX, mouseY);
     }
 }

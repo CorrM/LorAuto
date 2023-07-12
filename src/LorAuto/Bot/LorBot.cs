@@ -1,4 +1,5 @@
-﻿using LorAuto.Bot.Model;
+﻿using System.Diagnostics;
+using LorAuto.Bot.Model;
 using LorAuto.Card.Model;
 using LorAuto.Client.Model;
 using LorAuto.Game;
@@ -21,6 +22,7 @@ internal class BotCurrentGameState
 }
 
 // TODO: Sometimes attack or block starts early than it should be, it could attack before pull new card that you get every round
+// TODO: Get raid of all sleep, replace it with image processing
 
 /// <summary>
 /// Plays the game, responsible for executing commands from <see cref="Strategy"/>
@@ -58,7 +60,7 @@ public sealed class LorBot
             Thread.Sleep(1500);
             return;
         }
-        
+
         _currentGameState.Mulligan = true;
 
         // Wait before do any action
@@ -76,6 +78,7 @@ public sealed class LorBot
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
+        _userSimulator.ResetMousePosition();
     }
 
     private async Task BlockAsync(CancellationToken ct = default)
@@ -96,7 +99,7 @@ public sealed class LorBot
         {
             // Update before block
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-            
+
             // Check if card is already blocked
             bool isBlockable = true;
             foreach (InGameCard allyCard in _stateMachine.CardsOnBoard.CardsAttackOrBlock)
@@ -110,31 +113,29 @@ public sealed class LorBot
 
             if (!isBlockable)
                 continue;
-            
+
             _userSimulator.BlockCard(myCard, opponentCard);
-            
-            await Task.Delay(Random.Shared.Next(800, 1000), ct).ConfigureAwait(false);
+
+            await Task.Delay(Random.Shared.Next(400, 600), ct).ConfigureAwait(false);
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
+        _userSimulator.ResetMousePosition();
+
         await Task.Delay(10000, ct).ConfigureAwait(false);
-        
+
         // Update cards rectangles as it changed after move card to block
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task<bool> PlayCardsFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
+    private async Task<bool> PlayCardFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
     {
-        // Play cards from hand
-        if (playableCards.Count == 0)
-        {
-            // Update cards
-            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-            return false;
-        }
-        
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
+        // Play cards from hand
+        if (playableCards.Count == 0)
+            return false;
 
         (InGameCard HandCard, List<InGameCard?>? Targets)? playHandCard = _strategy.PlayHandCard(
             _stateMachine.CardsOnBoard,
@@ -142,21 +143,24 @@ public sealed class LorBot
             _stateMachine.Mana,
             _stateMachine.SpellMana,
             playableCards);
-        
+
         if (playHandCard is null)
             return false;
 
         // TODO: use playHandCard.Targets
-        _userSimulator.PlayCardFromHand(playHandCard.Value.HandCard);
+        _userSimulator.PlayCardFromHand(playHandCard.Value.HandCard /*, playHandCard.Value.Targets*/);
 
-        await Task.Delay(4000, ct).ConfigureAwait(false);
+        _userSimulator.ResetMousePosition();
+
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-        
         return true;
     }
 
     private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
     {
+        // Update cards
+        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
         // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
         if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is EGameCardType.Spell or EGameCardType.Ability))
         {
@@ -166,24 +170,17 @@ public sealed class LorBot
                 _currentGameState.FirstPassBlocking = true;
                 _logger?.LogInformation("First blocking pass...");
                 await Task.Delay(6000, ct).ConfigureAwait(false);
-                
-                // Update cards
-                await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
                 return true;
             }
 
             _userSimulator.CommitOrPassOrSkipTurn();
             await Task.Delay(_stateMachine.CardsOnBoard.SpellStack.Count * 2500, ct).ConfigureAwait(false);
-            
-            // Update cards
-            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+
             return true;
         }
 
-        // Update game data
-        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-        
-        // Determinate what to do with attack token
+        // Determinate what to do
         EGamePlayAction gamePlayAction = gameState == EGameState.DefendTurn
             ? _strategy.RespondToOpponentAction(_stateMachine.CardsOnBoard, _stateMachine.GameState, _stateMachine.Mana, _stateMachine.SpellMana)
             : _strategy.AttackTokenUsage(_stateMachine.CardsOnBoard, _stateMachine.Mana, _stateMachine.SpellMana);
@@ -191,7 +188,7 @@ public sealed class LorBot
         {
             _userSimulator.CommitOrPassOrSkipTurn();
             await Task.Delay(4000, ct).ConfigureAwait(false);
-            
+
             // Update cards
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             return true;
@@ -202,19 +199,19 @@ public sealed class LorBot
             .OrderByDescending(card => card.Cost)
             .ToList();
 
-        // Play cards from hand
+        // Play card from hand
         if (playableCards.Count <= 0 || gamePlayAction != EGamePlayAction.PlayCards)
             return false;
-        
-        bool thereCardPlayed = await PlayCardsFromHandAsync(playableCards, ct).ConfigureAwait(false);
+
+        bool thereCardPlayed = await PlayCardFromHandAsync(playableCards, ct).ConfigureAwait(false);
         if (!thereCardPlayed)
             return false;
 
         await Task.Delay(4000, ct).ConfigureAwait(false);
-        
+
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-        
+
         return true;
     }
 
@@ -222,11 +219,15 @@ public sealed class LorBot
     {
         bool actionHandled = await PreDefendOrAttackAsync(EGameState.DefendTurn, ct).ConfigureAwait(false);
         if (actionHandled)
+        {
+            _userSimulator.ResetMousePosition();
             return;
-        
+        }
+
         // Any other 'gamePlayAction' or there is no playable cards
         _userSimulator.CommitOrPassOrSkipTurn();
 
+        _userSimulator.ResetMousePosition();
         await Task.Delay(4000, ct).ConfigureAwait(false);
     }
 
@@ -234,7 +235,10 @@ public sealed class LorBot
     {
         bool actionHandled = await PreDefendOrAttackAsync(EGameState.Attacking, ct).ConfigureAwait(false);
         if (actionHandled)
+        {
+            _userSimulator.ResetMousePosition();
             return;
+        }
 
         // Attack
         List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
@@ -243,7 +247,7 @@ public sealed class LorBot
             _userSimulator.PlayBoardCard(atkCard);
 
             await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
-            
+
             // Update cards
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         }
@@ -253,8 +257,10 @@ public sealed class LorBot
 
         // Submit attack
         _userSimulator.CommitOrPassOrSkipTurn();
+        _userSimulator.ResetMousePosition();
+
         await Task.Delay(4000, ct).ConfigureAwait(false);
-        
+
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
     }
@@ -266,20 +272,21 @@ public sealed class LorBot
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
         _logger?.LogInformation("Current game state: {GameState}", _stateMachine.GameState);
-        
+
         switch (_stateMachine.GameState)
         {
             case EGameState.None:
                 return;
 
             case EGameState.Hold:
-                break;
-            
+                await Task.Delay(3000, ct).ConfigureAwait(false);
+                return;
+
             case EGameState.Menus:
                 _userSimulator.SelectDeck(_gameRotation, _isPvp);
                 // TODO: Add a way to detect 'EGameState.SearchGame' so this statement doesnt get called more than once
                 break;
-            
+
             case EGameState.MenusDeckSelected:
                 _userSimulator.SelectDeck(_gameRotation, _isPvp);
                 break;
@@ -289,15 +296,15 @@ public sealed class LorBot
 
             case EGameState.UserInteractNotReady:
                 await Task.Delay(3000, ct).ConfigureAwait(false);
-                break;
-            
+                return;
+
             case EGameState.Mulligan:
                 Mulligan();
                 break;
 
             case EGameState.OpponentTurn:
                 await Task.Delay(3000, ct).ConfigureAwait(false);
-                break;
+                return;
 
             case EGameState.DefendTurn:
                 await DefendAsync(ct).ConfigureAwait(false);
@@ -324,13 +331,13 @@ public sealed class LorBot
                 _currentGameState.Reset();
                 _userSimulator.GameEndContinueAndReplay();
                 break;
-            
+
             default:
-                throw new ArgumentOutOfRangeException();
+                throw new UnreachableException();
         }
 
         Thread.Sleep(1000);
-        
+
         // Move mouse to center after each play 
         _userSimulator.ResetMousePosition();
     }
