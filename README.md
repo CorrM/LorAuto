@@ -14,7 +14,8 @@ A bot for the game [Legends of Runeterra](https://playruneterra.com/en-us/) writ
 
 - Download **LorAuto** latest release from here [releases](https://github.com/CorrM/LorAuto/releases).
 - Run the game the way it is specified in the Prerequisites section.
-- 
+- Run `LorAuto.exe` to start bot.
+  - You can run `LorAuto.exe -h` to get more information about arguments.
 
 Bot will then navigate through menus and always select the first deck in your collection and select the play button.
 You can favorite the deck you want to use, or prepend the deck's name with a '.' (that way it will appear first on the list).
