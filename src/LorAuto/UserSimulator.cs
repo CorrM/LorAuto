@@ -3,20 +3,27 @@ using GregsStack.InputSimulatorStandard;
 using GregsStack.InputSimulatorStandard.Native;
 using LorAuto.Bot.Model;
 using LorAuto.Card.Model;
+using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
-using LorAuto.Game;
 using PInvoke;
 
 namespace LorAuto;
 
-public sealed class UserSimulator
+/// <summary>
+/// Represents a user simulator for simulating user interactions in the game.
+/// </summary>
+internal sealed class UserSimulator
 {
     private readonly StateMachine _stateMachine;
     private readonly InputSimulator _input;
     private readonly (double, double)[] _selectDeckAi;
     private readonly (double, double)[] _selectDeckPvp;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UserSimulator"/> class.
+    /// </summary>
+    /// <param name="stateMachine">The state machine used for game state tracking.</param>
     public UserSimulator(StateMachine stateMachine)
     {
         _stateMachine = stateMachine;
@@ -26,6 +33,9 @@ public sealed class UserSimulator
         _selectDeckPvp = new (double, double)[] { (0.04721, 0.33454), (0.15738, 0.25), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538) };
     }
 
+    /// <summary>
+    /// Sets the game window to the foreground if the game is not already in the foreground.
+    /// </summary>
     private void ForegroundIfGameNot()
     {
         _stateMachine.UpdateClientInfo();
@@ -36,6 +46,11 @@ public sealed class UserSimulator
         User32.SetForegroundWindow(_stateMachine.GameWindowHandle);
     }
 
+    /// <summary>
+    /// Simulates the selection of a deck based on the game rotation and PvP mode.
+    /// </summary>
+    /// <param name="gameRotation">The game rotation.</param>
+    /// <param name="isPvp">Specifies whether it is PvP mode.</param>
     public void SelectDeck(EGameRotation gameRotation, bool isPvp)
     {
         ForegroundIfGameNot();
@@ -82,6 +97,10 @@ public sealed class UserSimulator
             .LeftButtonClick();
     }
 
+    /// <summary>
+    /// Simulates a click on a card in the game.
+    /// </summary>
+    /// <param name="card">The card to click.</param>
     public void ClickCard(InGameCard card)
     {
         ForegroundIfGameNot();
@@ -93,6 +112,10 @@ public sealed class UserSimulator
             .LeftButtonClick();
     }
 
+    /// <summary>
+    /// Simulates playing a card from the hand in the game.
+    /// </summary>
+    /// <param name="handCard">The card to play from the hand.</param>
     public void PlayCardFromHand(InGameCard handCard)
     {
         ForegroundIfGameNot();
@@ -117,6 +140,10 @@ public sealed class UserSimulator
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
     }
 
+    /// <summary>
+    /// Simulates playing a card from the board in the game.
+    /// </summary>
+    /// <param name="boardCard">The card to play from the board.</param>
     public void PlayBoardCard(InGameCard boardCard)
     {
         ForegroundIfGameNot();
@@ -134,6 +161,11 @@ public sealed class UserSimulator
             .LeftButtonUp();
     }
 
+    /// <summary>
+    /// Simulates blocking a card with another card in the game.
+    /// </summary>
+    /// <param name="card">The card to block.</param>
+    /// <param name="opponentBlocked">The opponent's card to block with.</param>
     public void BlockCard(InGameCard card, InGameCard opponentBlocked)
     {
         (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + card.TopCenterPos.Y);
@@ -147,6 +179,9 @@ public sealed class UserSimulator
             .LeftButtonUp();
     }
 
+    /// <summary>
+    /// Simulates committing a turn, passing a turn, or skipping a turn in the game.
+    /// </summary>
     public void CommitOrPassOrSkipTurn()
     {
         ForegroundIfGameNot();
@@ -156,6 +191,9 @@ public sealed class UserSimulator
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
     }
 
+    /// <summary>
+    /// Simulates continuing and replaying the game after it ends.
+    /// </summary>
     public void GameEndContinueAndReplay()
     {
         double continueBtnPosX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.66);
@@ -176,6 +214,9 @@ public sealed class UserSimulator
         }
     }
 
+    /// <summary>
+    /// Resets the mouse position to a default position.
+    /// </summary>
     public void ResetMousePosition()
     {
         double mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.1041);

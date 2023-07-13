@@ -1,8 +1,8 @@
 ﻿using GameOverlay.Drawing;
 using GameOverlay.Windows;
 using LorAuto.Card.Model;
+using LorAuto.Client;
 using LorAuto.Client.Model;
-using LorAuto.Game;
 using Rectangle = System.Drawing.Rectangle;
 
 namespace LorAuto.Cli;
@@ -57,7 +57,7 @@ public sealed class BotOverlay : IDisposable
 
         using SolidBrush rBrush = _windowGfx.CreateSolidBrush(255, 0, 0);
         using SolidBrush bBrush = _windowGfx.CreateSolidBrush(0, 0, 255);
-        
+
         int x = card.Position.X;
         int y = card.Position.Y;
 
@@ -79,7 +79,7 @@ public sealed class BotOverlay : IDisposable
         _windowGfx.ClearScene();
 
         using SolidBrush gBrush = _windowGfx.CreateSolidBrush(0, 255, 0);
-        
+
         if (_stateMachine.GameState is not (EGameState.Menus or EGameState.MenusDeckSelected or EGameState.End))
         {
             DrawSpellMana(gBrush);

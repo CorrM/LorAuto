@@ -1,8 +1,8 @@
 ﻿using System.CommandLine;
 using LorAuto.Bot;
 using LorAuto.Bot.Model;
+using LorAuto.Card;
 using LorAuto.Client;
-using LorAuto.Game;
 using LorAuto.Strategies;
 using Microsoft.Extensions.Logging;
 using Serilog;

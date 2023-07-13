@@ -1,4 +1,4 @@
-﻿namespace LorAuto.Game.Model;
+﻿namespace LorAuto.Client.Model;
 
 public static class Constants
 {
@@ -518,7 +518,7 @@ public static class Constants
             0, 0, 0, 0, 0, 0
         }
     };
-    
+
     public readonly static byte[][] Two =
     {
         new byte[]

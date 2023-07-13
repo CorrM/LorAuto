@@ -1,4 +1,4 @@
-﻿using LorAuto.Client;
+﻿using LorAuto.Card;
 
 namespace LorAuto.Test;
 

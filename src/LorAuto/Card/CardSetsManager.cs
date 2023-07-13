@@ -4,8 +4,11 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using LorAuto.Card.Model;
 
-namespace LorAuto.Client;
+namespace LorAuto.Card;
 
+/// <summary>
+/// Manages game card sets.
+/// </summary>
 public sealed class CardSetsManager
 {
     private readonly static HttpClient _httpClient;
@@ -13,7 +16,14 @@ public sealed class CardSetsManager
     private readonly string[] _forbiddenCardSets = { "set6ab" };
     private readonly string _cardSetsDirName;
 
+    /// <summary>
+    /// Indicates whether the card sets are loaded.
+    /// </summary>
     public bool CardSetsLoaded { get; private set; }
+
+    /// <summary>
+    /// Dictionary of card sets, where the key is the card set name and the value is the corresponding <see cref="GameCardSet"/>.
+    /// </summary>
     public Dictionary<string, GameCardSet> CardSets { get; }
 
     static CardSetsManager()
@@ -24,17 +34,32 @@ public sealed class CardSetsManager
         };
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CardSetsManager"/> class.
+    /// </summary>
+    /// <param name="cardSetsDirName">The directory name for card sets.</param>
     public CardSetsManager(string cardSetsDirName)
     {
         _cardSetsDirName = cardSetsDirName;
         CardSets = new Dictionary<string, GameCardSet>();
     }
 
+    /// <summary>
+    /// Gets the path for the card sets directory.
+    /// </summary>
+    /// <returns>The path for the card sets directory.</returns>
     private string GetCardSetsPath()
     {
         return Path.Combine(Environment.CurrentDirectory, _cardSetsDirName);
     }
 
+    /// <summary>
+    /// Downloads a card set asynchronously.
+    /// </summary>
+    /// <param name="cardSetName">The name of the card set to download.</param>
+    /// <param name="addIndent">Indicates whether to add indentation to the downloaded JSON file.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task DownloadCardSetAsync(string cardSetName, bool addIndent = false, CancellationToken ct = default)
     {
         string cardSetJson = await _httpClient.GetStringAsync($"{cardSetName}/en_us/data/{cardSetName}-en_us.json", ct)
@@ -58,6 +83,12 @@ public sealed class CardSetsManager
         await File.WriteAllTextAsync(cardSetPath, cardSetJson, ct);
     }
 
+    /// <summary>
+    /// Parses the cards in a card set asynchronously.
+    /// </summary>
+    /// <param name="cardSetName">The name of the card set to parse.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation. The task result is the parsed <see cref="GameCardSet"/>.</returns>
     private async Task<GameCardSet> ParseCardSetCardsAsync(string cardSetName, CancellationToken ct = default)
     {
         string setFileName = $"{cardSetName}.json";
@@ -87,6 +118,10 @@ public sealed class CardSetsManager
         };
     }
 
+    /// <summary>
+    /// Gets the names of existing card sets.
+    /// </summary>
+    /// <returns>An array of card set names.</returns>
     public string[] GetExistsCardSetsNames()
     {
         string cardSetsBasePath = GetCardSetsPath();
@@ -96,6 +131,11 @@ public sealed class CardSetsManager
             .ToArray();
     }
 
+    /// <summary>
+    /// Downloads missing card sets asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task DownloadMissingCardSetsAsync(CancellationToken ct = default)
     {
         string cardSetsBasePath = GetCardSetsPath();
@@ -147,6 +187,10 @@ public sealed class CardSetsManager
         GC.Collect();
     }
 
+    /// <summary>
+    /// Deletes the card sets.
+    /// </summary>
+    /// <returns><c>true</c> if the card sets were successfully deleted; otherwise, <c>false</c>.</returns>
     public bool DeleteCardSets()
     {
         string cardSetsPath = Path.Combine(Environment.CurrentDirectory, _cardSetsDirName);
@@ -168,6 +212,11 @@ public sealed class CardSetsManager
         return true;
     }
 
+    /// <summary>
+    /// Loads the card sets asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task LoadCardSetsAsync(CancellationToken ct = default)
     {
         // Clear old data

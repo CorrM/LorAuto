@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using LorAuto.Bot.Model;
 using LorAuto.Card.Model;
+using LorAuto.Client;
 using LorAuto.Client.Model;
-using LorAuto.Game;
 using LorAuto.Strategies;
 using LorAuto.Strategies.Model;
 using Microsoft.Extensions.Logging;
@@ -53,7 +53,7 @@ public sealed class LorBot
         _userSimulator = new UserSimulator(_stateMachine);
     }
 
-    private void Mulligan()
+    private async Task MulliganAsync()
     {
         if (_currentGameState.Mulligan)
         {
@@ -64,7 +64,11 @@ public sealed class LorBot
         _currentGameState.Mulligan = true;
 
         // Wait before do any action
-        Thread.Sleep(Random.Shared.Next(1000, 3000));
+        while (_stateMachine.CardsOnBoard.CardsMulligan.Count != 4)
+        {
+            Thread.Sleep(1500);
+            await _stateMachine.UpdateGameDataAsync().ConfigureAwait(false);
+        }
 
         IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
         foreach (InGameCard card in cardsToReplace)
@@ -73,7 +77,6 @@ public sealed class LorBot
                 continue;
 
             _userSimulator.ClickCard(card);
-
             Thread.Sleep(Random.Shared.Next(300, 600));
         }
 
@@ -187,7 +190,6 @@ public sealed class LorBot
         if (gamePlayAction == EGamePlayAction.Skip)
         {
             _userSimulator.CommitOrPassOrSkipTurn();
-            await Task.Delay(4000, ct).ConfigureAwait(false);
 
             // Update cards
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
@@ -206,8 +208,6 @@ public sealed class LorBot
         bool thereCardPlayed = await PlayCardFromHandAsync(playableCards, ct).ConfigureAwait(false);
         if (!thereCardPlayed)
             return false;
-
-        await Task.Delay(4000, ct).ConfigureAwait(false);
 
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
@@ -299,7 +299,7 @@ public sealed class LorBot
                 return;
 
             case EGameState.Mulligan:
-                Mulligan();
+                await MulliganAsync().ConfigureAwait(false);
                 break;
 
             case EGameState.OpponentTurn:
@@ -319,12 +319,6 @@ public sealed class LorBot
 
             case EGameState.Blocking:
                 await BlockAsync(ct).ConfigureAwait(false);
-                break;
-
-            case EGameState.RoundEnd:
-                break;
-
-            case EGameState.Pass:
                 break;
 
             case EGameState.End:

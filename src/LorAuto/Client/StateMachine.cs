@@ -3,16 +3,15 @@ using System.Drawing;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
+using LorAuto.Card;
 using LorAuto.Card.Model;
-using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
-using LorAuto.Game.Model;
 using LorAuto.OCR;
 using PInvoke;
-using Constants = LorAuto.Game.Model.Constants;
+using Constants = LorAuto.Client.Model.Constants;
 
-namespace LorAuto.Game;
+namespace LorAuto.Client;
 
 /// <summary>
 /// Determines the game state and cards on board by using the LoR API and cv2 functionality
@@ -31,18 +30,66 @@ public sealed class StateMachine : IDisposable
     private GameResultApiResponse? _gameResult;
     private CardPositionsApiResponse? _gameData;
 
+    /// <summary>
+    /// Gets the handle of the game window.
+    /// </summary>
     public IntPtr GameWindowHandle { get; private set; }
+
+    /// <summary>
+    /// Gets the location of the game window.
+    /// </summary>
     public Point WindowLocation { get; private set; }
+
+    /// <summary>
+    /// Gets the size of the game window.
+    /// </summary>
     public Size WindowSize { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the game is in the foreground.
+    /// </summary>
     public bool GameIsForeground { get; private set; }
+
+    /// <summary>
+    /// Gets the component locator used for locating various game components.
+    /// </summary>
     public GameComponentLocator ComponentLocator { get; }
+
+    /// <summary>
+    /// Gets the number of games won continuously.
+    /// </summary>
     public int GamesWonCont { get; private set; }
+
+    /// <summary>
+    /// Gets the current game state.
+    /// </summary>
     public EGameState GameState { get; private set; }
+
+    /// <summary>
+    /// Gets the cards present on the game board.
+    /// </summary>
     public BoardCards CardsOnBoard { get; }
+
+    /// <summary>
+    /// Gets the active deck information.
+    /// </summary>
     public ActiveDeckApiResponse ActiveDeck { get; }
+
+    /// <summary>
+    /// Gets the active deck information.
+    /// </summary>
     public int Mana { get; private set; }
+
+    /// <summary>
+    /// Gets the current spell mana count.
+    /// </summary>
     public int SpellMana { get; private set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StateMachine"/> class with the specified card sets manager and game client port.
+    /// </summary>
+    /// <param name="cardSetsManager">The card sets manager.</param>
+    /// <param name="gameClientPort">The port number of the game client.</param>
     public StateMachine(CardSetsManager cardSetsManager, int gameClientPort)
     {
         _cardSetsManager = cardSetsManager;
@@ -61,6 +108,10 @@ public sealed class StateMachine : IDisposable
         //User32.SetProcessDPIAware();
     }
 
+    /// <summary>
+    /// Gets the handle of the game window.
+    /// </summary>
+    /// <returns>The handle of the game window.</returns>
     private IntPtr GetWindowHandle()
     {
         IntPtr targetHandler = IntPtr.Zero;
@@ -82,6 +133,10 @@ public sealed class StateMachine : IDisposable
         return targetHandler;
     }
 
+    /// <summary>
+    /// Gets the location and size of the game window.
+    /// </summary>
+    /// <returns>A tuple containing the window location and size.</returns>
     private (Point, Size) GetWindowRectInfo()
     {
         if (GameWindowHandle == IntPtr.Zero)
@@ -96,12 +151,20 @@ public sealed class StateMachine : IDisposable
         return (loc, size);
     }
 
+    /// <summary>
+    /// Checks if the game is in the foreground.
+    /// </summary>
+    /// <returns><c>true</c> if the game is in the foreground; otherwise, <c>false</c>.</returns>
     private bool GetGameIsForeground()
     {
         IntPtr hWindow = User32.GetForegroundWindow();
         return hWindow == GameWindowHandle;
     }
 
+    /// <summary>
+    /// Gets the frames of the game window.
+    /// </summary>
+    /// <returns>An array of BGR images representing the frames.</returns>
     private Image<Bgr, byte>[] GetFrames()
     {
         const int framesCount = 4;
@@ -129,6 +192,11 @@ public sealed class StateMachine : IDisposable
         return frames;
     }
 
+    /// <summary>
+    /// Retrieves the game result asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The game result response.</returns>
     private async Task<GameResultApiResponse?> GetGameResultAsync(CancellationToken ct = default)
     {
         (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync(ct).ConfigureAwait(false);
@@ -138,6 +206,11 @@ public sealed class StateMachine : IDisposable
         return response;
     }
 
+    /// <summary>
+    /// Retrieves the game data asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>The card positions response.</returns>
     private async Task<CardPositionsApiResponse?> GetGameDataAsync(CancellationToken ct = default)
     {
         (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
@@ -147,6 +220,10 @@ public sealed class StateMachine : IDisposable
         return response;
     }
 
+    /// <summary>
+    /// Updates the active deck asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
     private async Task UpdateActiveDeckAsync(CancellationToken ct = default)
     {
         ActiveDeck.CardsInDeck.Clear();
@@ -164,6 +241,11 @@ public sealed class StateMachine : IDisposable
             ActiveDeck.CardsInDeck.Add(cardCode, cardCount);
     }
 
+    /// <summary>
+    /// Gets the card position based on the given game client rectangle.
+    /// </summary>
+    /// <param name="rectCard">The game client rectangle representing the card.</param>
+    /// <returns>The in-game card position.</returns>
     private EInGameCardPosition GetCardPosition(GameClientRectangle rectCard)
     {
         var cardPosition = EInGameCardPosition.None;
@@ -190,6 +272,11 @@ public sealed class StateMachine : IDisposable
         return cardPosition;
     }
 
+    /// <summary>
+    /// Stores the given card in the appropriate card collection based on its position.
+    /// </summary>
+    /// <param name="card">The in-game card to store.</param>
+    /// <param name="cardPosition">The in-game card position.</param>
     private void StoreCard(InGameCard card, EInGameCardPosition cardPosition)
     {
         // Store cards
@@ -235,6 +322,11 @@ public sealed class StateMachine : IDisposable
         CardsOnBoard.AllCards.Add(card);
     }
 
+    /// <summary>
+    /// Updates the attack and health values of the playable card.
+    /// </summary>
+    /// <param name="card">The playable card.</param>
+    /// <param name="frames">The frames of the game window.</param>
     private void UpdatePlayableCardAttackHealth(InGameCard card, Image<Bgr, byte>[] frames)
     {
         var colors = new (Hsv Lower, Hsv Higher)[]
@@ -303,6 +395,11 @@ public sealed class StateMachine : IDisposable
         card.UpdateAttackHealth(attackNumber, hpNumber);
     }
 
+    /// <summary>
+    /// Updates the cards on the game board asynchronously.
+    /// </summary>
+    /// <param name="frames">The frames of the game window.</param>
+    /// <param name="ct">The cancellation token.</param>
     private async Task UpdateCardsOnBoardAsync(Image<Bgr, byte>[] frames, CancellationToken ct = default)
     {
         // Store cards references so we can update the card data in-place
@@ -356,6 +453,11 @@ public sealed class StateMachine : IDisposable
         CardsOnBoard.Sort();
     }
 
+    /// <summary>
+    /// Determines the current game state based on various conditions and image analysis.
+    /// </summary>
+    /// <param name="frames">The frames of the game window.</param>
+    /// <returns>The current game state.</returns>
     private EGameState GetGameState(Image<Bgr, byte>[] frames)
     {
         if (_gameResult is null || _gameData is null)
@@ -376,21 +478,19 @@ public sealed class StateMachine : IDisposable
             if (menusEditDeckButtonPx > 700)
                 return EGameState.MenusDeckSelected;
 
-            if (_gameResult.GameID > _prevGameID)
-            {
-                if (_gameResult.LocalPlayerWon)
-                    GamesWonCont += 1;
-
-                _nGames += 1;
-                _prevGameID = _gameResult.GameID;
-
-                return EGameState.End;
-            }
-
             // TODO: Check for SearchGame here
             //return EGameState.SearchGame;
 
-            return EGameState.Menus;
+            if (_gameResult.GameID <= _prevGameID)
+                return EGameState.Menus;
+
+            if (_gameResult.LocalPlayerWon)
+                GamesWonCont += 1;
+
+            _nGames += 1;
+            _prevGameID = _gameResult.GameID;
+
+            return EGameState.End;
         }
 
         // # User interact not ready
@@ -437,6 +537,12 @@ public sealed class StateMachine : IDisposable
         return EGameState.DefendTurn;
     }
 
+    /// <summary>
+    /// Gets the current mana count based on the frames of the game window.
+    /// </summary>
+    /// <param name="frames">The frames of the game window.</param>
+    /// <param name="maxRetry">The maximum number of retries to obtain the mana count.</param>
+    /// <returns>The current mana count.</returns>
     private int GetMana(Image<Bgr, byte>[] frames, int maxRetry = 2)
     {
         // TODO: Get raid of that method of getting mana, use same method that used to update in-game card info
@@ -490,6 +596,11 @@ public sealed class StateMachine : IDisposable
         return -1;
     }
 
+    /// <summary>
+    /// Gets the current spell mana count based on the frames of the game window.
+    /// </summary>
+    /// <param name="frames">The frames of the game window.</param>
+    /// <returns>The current spell mana count.</returns>
     private int GetSpellMana(Image<Bgr, byte>[] frames)
     {
         Image<Bgr, byte> lastFrame = frames.First();
@@ -509,6 +620,9 @@ public sealed class StateMachine : IDisposable
         return Math.Min(3, spellMana);
     }
 
+    /// <summary>
+    /// Updates the client information.
+    /// </summary>
     public void UpdateClientInfo()
     {
         GameWindowHandle = GetWindowHandle();
@@ -516,6 +630,10 @@ public sealed class StateMachine : IDisposable
         GameIsForeground = GetGameIsForeground();
     }
 
+    /// <summary>
+    /// Updates the game data asynchronously.
+    /// </summary>
+    /// <param name="ct">The cancellation token.</param>
     public async Task UpdateGameDataAsync(CancellationToken ct = default)
     {
         if (GameWindowHandle == IntPtr.Zero)
@@ -548,6 +666,9 @@ public sealed class StateMachine : IDisposable
         // turn = 0;
     }
 
+    /// <summary>
+    /// Disposes the resources used by the state machine.
+    /// </summary>
     public void Dispose()
     {
         _gameClientApi.Dispose();
