@@ -26,7 +26,7 @@ jobs:
         run: |
           dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
         
-      - name: Upload artifact for deployment job
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: LorAuto
@@ -35,7 +35,7 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: LorAuto
+          artifacts: ${{env.DOTNET_ROOT}}/LorAuto
           tag: ${{ github.ref }}
           name: Release ${{ github.ref }}
           makeLatest: true
