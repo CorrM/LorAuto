@@ -13,6 +13,20 @@ The bot utilizes image processing techniques to recognize the current game state
 - In-game third party endpoints enabled on port 21337 (should be on by default) Or pass the port using (-p option).
 - Game option `Enable AUTOPASS` checked(true).
 
+## Features
+
+### Real-time card update
+
+Real-time card updates as the bot dynamically adjusts card attributes, such as Attack, Health and ~Keywords~, during gameplay.
+No longer fully confined to static data provided by the game client.
+
+### Strategies (play styles)
+
+Unleash your creativity and adaptability with our bot.
+Create strategy to fit your deck playstyle, allowing you to implement unique strategies that align perfectly with your card-set.
+
+Note that this bot has built-in strategy `generic` play style.
+
 ## How to run
 
 - Download **LorAuto** latest release from here [releases](https://github.com/CorrM/LorAuto/releases).
