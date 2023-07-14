@@ -76,7 +76,7 @@ public sealed class StateMachine : IDisposable
     public ActiveDeckApiResponse ActiveDeck { get; }
 
     /// <summary>
-    /// Gets the active deck information.
+    /// Gets the current mana count.
     /// </summary>
     public int Mana { get; private set; }
 
@@ -190,6 +190,19 @@ public sealed class StateMachine : IDisposable
         Gdi32.DeleteObject(hBitmap);
 
         return frames;
+    }
+
+    /// <summary>
+    /// Determines whether the player can react based on the last captured frame.
+    /// </summary>
+    /// <param name="lastFrame">The last captured frame.</param>
+    /// <returns><c>true</c> if the player can react; otherwise, <c>false</c>.</returns>
+    private bool PlayerCanReact(Image<Bgr, byte> lastFrame)
+    {
+        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(ComponentLocator.GetTurnButtonRect());
+        int mulliganNumBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
+
+        return mulliganNumBluePx > 100; // End turn button is not GRAY
     }
 
     /// <summary>
@@ -336,6 +349,7 @@ public sealed class StateMachine : IDisposable
             (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
             (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
+            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Frost
         };
 
         (int Number, float Confidence) ReadNumberFromImage(Image<Bgr, byte> img)
@@ -494,9 +508,7 @@ public sealed class StateMachine : IDisposable
         }
 
         // # User interact not ready
-        Rectangle roundsLogRect = ComponentLocator.GetRoundsLogRect();
-
-        using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(roundsLogRect);
+        using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(ComponentLocator.GetRoundsLogRect());
         int roundsLogPx = roundsLogSubImg.CountNonZeroInHsvRange(new Hsv(20, 80, 130), new Hsv(30, 150, 180));
         //Console.WriteLine($"roundsLogPx: {roundsLogPx}");
 
@@ -508,24 +520,17 @@ public sealed class StateMachine : IDisposable
         // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
         GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
-            return EGameState.Mulligan;
+            return PlayerCanReact(lastFrame) ? EGameState.Mulligan : EGameState.UserInteractNotReady;
 
-        // TODO: Maybe need some more conditions as the python bot are using sleep a lot, so it just maybe that's why blocking state are accurate
-        //       anyway ("Check if card is already blocked") check in `Bot::Block` method can handle it
         if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
-            return EGameState.Blocking;
+            return PlayerCanReact(lastFrame) ? EGameState.Blocking : EGameState.UserInteractNotReady;
 
         // # Check if it's our turn
-        Rectangle turnButtonRect = ComponentLocator.GetTurnButtonRect();
-        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(turnButtonRect);
-        int numBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
-        if (numBluePx < 100) // End turn button is GRAY
+        if (!PlayerCanReact(lastFrame))
             return EGameState.OpponentTurn;
 
         // # Check if local_player has the attack token
-        Rectangle attackRect = ComponentLocator.GetAttackTokenRect();
-
-        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(attackRect);
+        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(ComponentLocator.GetAttackTokenRect());
         int numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
             return EGameState.AttackTurn;

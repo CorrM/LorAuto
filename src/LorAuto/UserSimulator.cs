@@ -203,14 +203,15 @@ internal sealed class UserSimulator
         {
             ForegroundIfGameNot();
 
-            _stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
-            if (_stateMachine.GameState == EGameState.MenusDeckSelected)
-                break;
-
             _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY)
                 .LeftButtonClick();
 
-            Thread.Sleep(1500);
+            Thread.Sleep(1000);
+
+            // Don't move this code form here, as the current game state will just be 'EGameState.Menus'
+            _stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
+            if (_stateMachine.GameState is EGameState.MenusDeckSelected)
+                break;
         }
     }
 

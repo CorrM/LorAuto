@@ -29,7 +29,7 @@ internal enum EGameClientApiRequestType
 /// <summary>
 /// Represents a game client API for interacting with the game client.
 /// </summary>
-internal sealed class GameClientApi : IDisposable
+public sealed class GameClientApi : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly Dictionary<EGameClientApiRequestType, string> _requestsMap;

@@ -9,19 +9,6 @@ using Microsoft.Extensions.Logging;
 
 namespace LorAuto.Bot;
 
-internal class BotCurrentGameState
-{
-    public bool Mulligan { get; set; }
-    public bool FirstPassBlocking { get; set; }
-
-    public void Reset()
-    {
-        Mulligan = false;
-        FirstPassBlocking = false;
-    }
-}
-
-// TODO: Sometimes attack or block starts early than it should be, it could attack before pull new card that you get every round
 // TODO: Get raid of all sleep, replace it with image processing
 
 /// <summary>
@@ -38,7 +25,6 @@ public sealed class LorBot
     private readonly EGameRotation _gameRotation;
     private readonly bool _isPvp;
     private readonly ILogger? _logger;
-    private readonly BotCurrentGameState _currentGameState;
     private readonly UserSimulator _userSimulator;
 
     public LorBot(StateMachine stateMachine, Strategy strategy, EGameRotation gameRotation, bool isPvp, ILogger? logger)
@@ -49,25 +35,16 @@ public sealed class LorBot
         _isPvp = isPvp;
         _logger = logger;
 
-        _currentGameState = new BotCurrentGameState();
         _userSimulator = new UserSimulator(_stateMachine);
     }
 
-    private async Task MulliganAsync()
+    private async Task MulliganAsync(CancellationToken ct = default)
     {
-        if (_currentGameState.Mulligan)
-        {
-            Thread.Sleep(1500);
-            return;
-        }
-
-        _currentGameState.Mulligan = true;
-
         // Wait before do any action
         while (_stateMachine.CardsOnBoard.CardsMulligan.Count != 4)
         {
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             Thread.Sleep(1500);
-            await _stateMachine.UpdateGameDataAsync().ConfigureAwait(false);
         }
 
         IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
@@ -77,27 +54,27 @@ public sealed class LorBot
                 continue;
 
             _userSimulator.ClickCard(card);
-            Thread.Sleep(Random.Shared.Next(300, 600));
+            Thread.Sleep(Random.Shared.Next(300, 500));
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
         _userSimulator.ResetMousePosition();
+
+        // Wait mulligan
+        for (int i = 0; _stateMachine.CardsOnBoard.CardsMulligan.Count != 0 || i >= 10; ++i)
+        {
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+            await Task.Delay(1000, ct).ConfigureAwait(false);
+        }
     }
 
     private async Task BlockAsync(CancellationToken ct = default)
     {
-        // Double check to avoid False Positives (card draw animation, card play animation...)
-        if (!_currentGameState.FirstPassBlocking)
-        {
-            _currentGameState.FirstPassBlocking = true;
-            _logger?.LogInformation("First blocking pass...");
-            await Task.Delay(6000, ct).ConfigureAwait(false);
-            return;
-        }
-
         Dictionary<InGameCard, IEnumerable<InGameCard>?>? spellsToUse;
         IEnumerable<InGameCard>? abilitiesToUse;
         Dictionary<InGameCard, InGameCard> blockCards = _strategy.Block(_stateMachine.CardsOnBoard, out spellsToUse, out abilitiesToUse);
+
+        // TODO: Use `spellsToUse` and `abilitiesToUse`
         foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
         {
             // Update before block
@@ -167,16 +144,6 @@ public sealed class LorBot
         // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
         if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is EGameCardType.Spell or EGameCardType.Ability))
         {
-            // Double check to avoid False Positives
-            if (!_currentGameState.FirstPassBlocking)
-            {
-                _currentGameState.FirstPassBlocking = true;
-                _logger?.LogInformation("First blocking pass...");
-                await Task.Delay(6000, ct).ConfigureAwait(false);
-
-                return true;
-            }
-
             _userSimulator.CommitOrPassOrSkipTurn();
             await Task.Delay(_stateMachine.CardsOnBoard.SpellStack.Count * 2500, ct).ConfigureAwait(false);
 
@@ -322,15 +289,12 @@ public sealed class LorBot
                 break;
 
             case EGameState.End:
-                _currentGameState.Reset();
                 _userSimulator.GameEndContinueAndReplay();
                 break;
 
             default:
                 throw new UnreachableException();
         }
-
-        Thread.Sleep(1000);
 
         // Move mouse to center after each play 
         _userSimulator.ResetMousePosition();
