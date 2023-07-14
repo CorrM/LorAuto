@@ -1,6 +1,8 @@
 # LorAuto
 
-A bot for the game [Legends of Runeterra](https://playruneterra.com/en-us/) written in C#. It can play the game on a very superficial level.
+This project is a bot specifically designed for the popular card game, [Legends of Runeterra](https://playruneterra.com/en-us/).
+The bot utilizes image processing techniques to recognize the current game state and update card information in real-time.
+
 **LorAuto** are Heavily inspired by this project [LoR-Bot](https://github.com/MOj0/LoR-Bot).
 
 ## Prerequisites
