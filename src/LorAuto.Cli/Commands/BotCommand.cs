@@ -17,13 +17,13 @@ public sealed class BotCommand : RootCommand
         var gameRotationOpt = new Option<EGameRotation>("-r", () => EGameRotation.Standard, "Game rotation to pick.");
         var strategyOpt = new Option<string>("-s", () => "generic", "Strategy bot will use.");
         var gamePortOpt = new Option<int>("-p", () => 21337, "Game client third party endpoints port.");
-        var pvpGameOpt = new Option<bool>("--pvp", () => true, "Play game against pvp or AI.");
+        var noPvpGameOpt = new Option<bool>("--noPVP", () => false, "Play game against pvp or AI.");
         var overlayOpt = new Option<bool>("--overlay", () => false, "Show overlay on top of LoR that help to indicate and debug.");
 
         AddOption(gameRotationOpt);
         AddOption(strategyOpt);
         AddOption(gamePortOpt);
-        AddOption(pvpGameOpt);
+        AddOption(noPvpGameOpt);
         AddOption(overlayOpt);
 
         this.SetHandler(async context =>
@@ -31,7 +31,7 @@ public sealed class BotCommand : RootCommand
             EGameRotation gameRotation = context.ParseResult.GetValueForOption(gameRotationOpt);
             string strategy = context.ParseResult.GetValueForOption(strategyOpt)!;
             int gamePort = context.ParseResult.GetValueForOption(gamePortOpt);
-            bool isPvpGame = context.ParseResult.GetValueForOption(pvpGameOpt);
+            bool isPvpGame = !context.ParseResult.GetValueForOption(noPvpGameOpt);
             bool overlay = context.ParseResult.GetValueForOption(overlayOpt);
             CancellationToken token = context.GetCancellationToken();
 

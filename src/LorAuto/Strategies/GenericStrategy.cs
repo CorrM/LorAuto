@@ -10,13 +10,13 @@ public sealed class GenericStrategy : Strategy
     {
         return mulliganCards.Where(c => c.Cost > 3);
     }
-    
+
     public override (InGameCard HandCard, List<InGameCard?>? Targets)? PlayHandCard(BoardCards boardCards, EGameState gameState, int mana, int spellMana, IEnumerable<InGameCard> playableHandCards)
     {
         InGameCard? cardToPlay = playableHandCards.Where(c => c.Type is not (EGameCardType.Ability or EGameCardType.Spell))
-            .Where(c => c.Cost <= mana)
+            .Where(c => c.Cost <= mana && !c.Description.StartsWith("To play me"))
             .MaxBy(c => c.Attack);
-        
+
         if (cardToPlay is not null)
             return (cardToPlay, null);
 
@@ -30,14 +30,14 @@ public sealed class GenericStrategy : Strategy
 
         var ret = new Dictionary<InGameCard, InGameCard>();
         int opponentStartIdx = 0; // To not block same opponent card by all our cards
-        
+
         // What if my cards more than opponent cards ?
         foreach (InGameCard myCard in boardCards.CardsBoard)
         {
             for (int i = opponentStartIdx; i < boardCards.OpponentCardsAttackOrBlock.Count; i++)
             {
                 InGameCard opponent = boardCards.OpponentCardsAttackOrBlock[i];
-                
+
                 bool isBlockable = true;
                 foreach (InGameCard allyCard in boardCards.CardsAttackOrBlock)
                 {
@@ -68,7 +68,7 @@ public sealed class GenericStrategy : Strategy
                 break;
             }
         }
-        
+
         return ret;
     }
 
@@ -85,13 +85,13 @@ public sealed class GenericStrategy : Strategy
     public override List<InGameCard> Attack(BoardCards boardCards, IEnumerable<InGameCard> yourBoardCards)
     {
         List<InGameCard> inGameCards = yourBoardCards.ToList();
-        
+
         // Support will be listed first
         //foreach (InGameCard card in inGameCards.Where(c => c.Description.Contains("Support:")))
         //{
         //    
         //}
-        
+
         return inGameCards;
     }
 }

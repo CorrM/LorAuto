@@ -60,10 +60,10 @@ public sealed class GameComponentLocator
     /// <returns>A <see cref="Rectangle"/> object representing the turn button region.</returns>
     public Rectangle GetTurnButtonRect()
     {
-        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.77);
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.82);
         int y = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.42);
-        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.93) - x;
-        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.58) - y;
+        int w = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.10416);
+        int h = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.1574);
 
         return new Rectangle(x, y, w, h);
     }

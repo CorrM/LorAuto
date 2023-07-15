@@ -10,6 +10,13 @@ using Microsoft.Extensions.Logging;
 namespace LorAuto.Bot;
 
 // TODO: Get raid of all sleep, replace it with image processing
+/*
+do
+{
+    await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
+    await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+} while (_stateMachine.GameState == EGameState.UserInteractNotReady); 
+*/
 
 /// <summary>
 /// Plays the game, responsible for executing commands from <see cref="Strategy"/>
@@ -44,7 +51,7 @@ public sealed class LorBot
         while (_stateMachine.CardsOnBoard.CardsMulligan.Count != 4)
         {
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
-            Thread.Sleep(1500);
+            await Task.Delay(1000, ct).ConfigureAwait(false);
         }
 
         IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
@@ -54,17 +61,17 @@ public sealed class LorBot
                 continue;
 
             _userSimulator.ClickCard(card);
-            Thread.Sleep(Random.Shared.Next(300, 500));
+            await Task.Delay(Random.Shared.Next(200, 400), ct).ConfigureAwait(false);
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
         _userSimulator.ResetMousePosition();
 
         // Wait mulligan
-        for (int i = 0; _stateMachine.CardsOnBoard.CardsMulligan.Count != 0 || i >= 10; ++i)
+        for (int i = 0; _stateMachine.CardsOnBoard.CardsMulligan.Count == 0 && i < 10; ++i)
         {
-            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             await Task.Delay(1000, ct).ConfigureAwait(false);
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         }
     }
 
@@ -95,17 +102,18 @@ public sealed class LorBot
                 continue;
 
             _userSimulator.BlockCard(myCard, opponentCard);
-
-            await Task.Delay(Random.Shared.Next(400, 600), ct).ConfigureAwait(false);
+            await Task.Delay(Random.Shared.Next(600, 800), ct).ConfigureAwait(false);
         }
 
         _userSimulator.CommitOrPassOrSkipTurn();
         _userSimulator.ResetMousePosition();
 
-        await Task.Delay(10000, ct).ConfigureAwait(false);
-
-        // Update cards rectangles as it changed after move card to block
-        await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+        // TODO: Should beak from that loop, if the opponent uses a spell while me blocking and i have a spell to response
+        for (int i = 0; _stateMachine.GameState == EGameState.Blocking && i < 10; ++i)
+        {
+            await Task.Delay(1000, ct).ConfigureAwait(false);
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private async Task<bool> PlayCardFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
@@ -193,9 +201,7 @@ public sealed class LorBot
 
         // Any other 'gamePlayAction' or there is no playable cards
         _userSimulator.CommitOrPassOrSkipTurn();
-
         _userSimulator.ResetMousePosition();
-        await Task.Delay(4000, ct).ConfigureAwait(false);
     }
 
     private async Task AttackAsync(CancellationToken ct = default)
@@ -213,14 +219,14 @@ public sealed class LorBot
         {
             _userSimulator.PlayBoardCard(atkCard);
 
-            await Task.Delay(Random.Shared.Next(800, 1250), ct).ConfigureAwait(false);
+            await Task.Delay(Random.Shared.Next(300, 400), ct).ConfigureAwait(false);
 
             // Update cards
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         }
 
         // Wait for any card effect
-        await Task.Delay(1000, ct).ConfigureAwait(false);
+        await Task.Delay(2000, ct).ConfigureAwait(false);
 
         // Submit attack
         _userSimulator.CommitOrPassOrSkipTurn();
@@ -266,7 +272,7 @@ public sealed class LorBot
                 return;
 
             case EGameState.Mulligan:
-                await MulliganAsync().ConfigureAwait(false);
+                await MulliganAsync(ct).ConfigureAwait(false);
                 break;
 
             case EGameState.OpponentTurn:

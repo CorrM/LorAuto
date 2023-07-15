@@ -195,11 +195,11 @@ public sealed class StateMachine : IDisposable
     /// <summary>
     /// Determines whether the player can react based on the last captured frame.
     /// </summary>
-    /// <param name="lastFrame">The last captured frame.</param>
+    /// <param name="frame">The captured frame.</param>
     /// <returns><c>true</c> if the player can react; otherwise, <c>false</c>.</returns>
-    private bool PlayerCanReact(Image<Bgr, byte> lastFrame)
+    private bool PlayerCanInteract(Image<Bgr, byte> frame)
     {
-        using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(ComponentLocator.GetTurnButtonRect());
+        using Image<Bgr, byte> turnBtnSubImg = frame.Crop(ComponentLocator.GetTurnButtonRect());
         int mulliganNumBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
 
         return mulliganNumBluePx > 100; // End turn button is not GRAY
@@ -520,13 +520,24 @@ public sealed class StateMachine : IDisposable
         // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
         GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
         if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
-            return PlayerCanReact(lastFrame) ? EGameState.Mulligan : EGameState.UserInteractNotReady;
+            return PlayerCanInteract(lastFrame) ? EGameState.Mulligan : EGameState.UserInteractNotReady;
 
+        // # Block
         if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
-            return PlayerCanReact(lastFrame) ? EGameState.Blocking : EGameState.UserInteractNotReady;
+        {
+            if (!PlayerCanInteract(lastFrame))
+                return EGameState.UserInteractNotReady;
+
+            //if ()
+            //{
+            //    
+            //}
+
+            return EGameState.Blocking;
+        }
 
         // # Check if it's our turn
-        if (!PlayerCanReact(lastFrame))
+        if (!PlayerCanInteract(lastFrame))
             return EGameState.OpponentTurn;
 
         // # Check if local_player has the attack token
@@ -660,6 +671,10 @@ public sealed class StateMachine : IDisposable
         // Clean
         foreach (Image<Bgr, byte> frame in frames)
             frame.Dispose();
+
+        bool isMyTurn = GameState is EGameState.Attacking or EGameState.Blocking or EGameState.AttackTurn or EGameState.DefendTurn;
+        if (isMyTurn && Mana == -1)
+            await Console.Error.WriteLineAsync("Unknown mana").ConfigureAwait(false);
 
         if (GameState != EGameState.End)
             return;
