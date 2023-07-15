@@ -1,6 +1,8 @@
 # LorAuto
 
-A bot for the game [Legends of Runeterra](https://playruneterra.com/en-us/) written in C#. It can play the game on a very superficial level.
+This project is a bot specifically designed for the popular card game, [Legends of Runeterra](https://playruneterra.com/en-us/).
+The bot utilizes image processing techniques to recognize the current game state and update card information in real-time.
+
 **LorAuto** are Heavily inspired by this project [LoR-Bot](https://github.com/MOj0/LoR-Bot).
 
 ## Prerequisites
@@ -10,6 +12,20 @@ A bot for the game [Legends of Runeterra](https://playruneterra.com/en-us/) writ
 - Game running full-screen at 1920x1080 resolution and at least medium quality, with Windows display scaling set to 100%.
 - In-game third party endpoints enabled on port 21337 (should be on by default) Or pass the port using (-p option).
 - Game option `Enable AUTOPASS` checked(true).
+
+## Features
+
+### Real-time card update
+
+Real-time card updates as the bot dynamically adjusts card attributes, such as Attack, Health and ~Keywords~, during gameplay.
+No longer fully confined to static data provided by the game client.
+
+### Strategies (play styles)
+
+Unleash your creativity and adaptability with our bot.
+Create strategy to fit your deck playstyle, allowing you to implement unique strategies that align perfectly with your card-set.
+
+Note that this bot has built-in strategy `generic` play style.
 
 ## How to run
 
