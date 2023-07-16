@@ -55,7 +55,7 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// <param name="rectCard">The game client rectangle that represents the card's position.</param>
     /// <param name="windowSize">The size of the game window.</param>
     /// <param name="inGamePosition">The in-game position of the card.</param>
-    public InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
+    internal InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
     {
         // Using reflection is better than forgetting to copy any property
         PropertyInfo[] propertyInfos = typeof(GameCard).GetProperties(BindingFlags.Instance | BindingFlags.Public);
@@ -72,7 +72,7 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// <param name="rectCard">The game client rectangle that represents the card's position.</param>
     /// <param name="windowSize">The size of the game window.</param>
     /// <param name="inGamePosition">The in-game position of the card.</param>
-    public void UpdatePosition(GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
+    internal void UpdatePosition(GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
     {
         if (CardID != rectCard.CardID)
             throw new Exception($"Current card and {nameof(rectCard)} not identical.");
@@ -92,7 +92,7 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// </summary>
     /// <param name="attack">The new attack value.</param>
     /// <param name="health">The new health value.</param>
-    public void UpdateAttackHealth(int attack, int health)
+    internal void UpdateAttackHealth(int attack, int health)
     {
         Attack = attack;
         Health = health;

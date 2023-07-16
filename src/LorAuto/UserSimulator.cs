@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Drawing;
 using GregsStack.InputSimulatorStandard;
 using GregsStack.InputSimulatorStandard.Native;
 using LorAuto.Bot.Model;
@@ -6,6 +7,7 @@ using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
+using LorAuto.Strategy.Model;
 using PInvoke;
 
 namespace LorAuto;
@@ -113,10 +115,29 @@ internal sealed class UserSimulator
     }
 
     /// <summary>
+    /// Simulates clicking on the nexus in the game.
+    /// </summary>
+    /// <param name="opponentNexus">Specifies whether the opponent's nexus should be clicked.</param>
+    public void ClickNexus(bool opponentNexus)
+    {
+        ForegroundIfGameNot();
+
+        (Point player, Point opponent) = _stateMachine.ComponentLocator.GetNexusPossition();
+        Point target = opponentNexus ? opponent : player;
+
+        int cx = _stateMachine.WindowLocation.X + target.X;
+        int cy = _stateMachine.WindowLocation.Y + target.Y;
+
+        _input.Mouse.MoveMouseSmooth(cx, cy)
+            .LeftButtonClick();
+    }
+
+    /// <summary>
     /// Simulates playing a card from the hand in the game.
     /// </summary>
     /// <param name="handCard">The card to play from the hand.</param>
-    public void PlayCardFromHand(InGameCard handCard)
+    /// <param name="target">The target for the card's effect, if applicable.</param>
+    public void PlayCardFromHand(InGameCard handCard, CardTargetSelector? target)
     {
         ForegroundIfGameNot();
 
@@ -133,18 +154,49 @@ internal sealed class UserSimulator
             .LeftButtonUp();
 
         Thread.Sleep(500); // Wait for the card maximize animation
+
+        if (target is not null && target.GetSelectedCard() == handCard)
+        {
+            List<(ECardTarget, InGameCard?)> targets = target.GetTargets();
+            foreach ((ECardTarget targetType, InGameCard? effectTarget) in targets)
+            {
+                switch (targetType)
+                {
+                    case ECardTarget.Card:
+                    case ECardTarget.HandCard:
+                        if (effectTarget is null)
+                            throw new InvalidOperationException("Selector that targeting a card should have an 'effectTarget'.");
+
+                        ClickCard(effectTarget);
+                        break;
+
+                    case ECardTarget.Nexus:
+                        ClickNexus(false);
+                        break;
+
+                    case ECardTarget.OpponentNexus:
+                        ClickNexus(true);
+                        break;
+
+                    default:
+                        throw new UnreachableException();
+                }
+            }
+        }
+
         if (handCard.Type != EGameCardType.Spell)
             return;
 
         Thread.Sleep(1000);
+
         _input.Keyboard.KeyPress(VirtualKeyCode.SPACE);
     }
 
     /// <summary>
-    /// Simulates playing a card from the board in the game.
+    /// Moves a board card to the field on the game board.
     /// </summary>
-    /// <param name="boardCard">The card to play from the board.</param>
-    public void PlayBoardCard(InGameCard boardCard)
+    /// <param name="boardCard">The board card to move to the field.</param>
+    public void MoveBoardCardToField(InGameCard boardCard)
     {
         ForegroundIfGameNot();
 

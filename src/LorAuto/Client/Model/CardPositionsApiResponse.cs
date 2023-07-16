@@ -1,14 +1,14 @@
 ﻿namespace LorAuto.Client.Model;
 
 [Serializable]
-public sealed class GameClientScreen
+internal sealed class GameClientScreen
 {
     public required int ScreenWidth { get; init; }
     public required int ScreenHeight { get; init; }
 }
 
 [Serializable]
-public sealed class GameClientRectangle
+internal sealed class GameClientRectangle
 {
     public required int CardID { get; init; }
     public required string CardCode { get; init; }
@@ -20,7 +20,7 @@ public sealed class GameClientRectangle
 }
 
 [Serializable]
-public sealed class CardPositionsApiResponse
+internal sealed class CardPositionsApiResponse
 {
     public required string PlayerName { get; init; }
     public required string OpponentName { get; init; }

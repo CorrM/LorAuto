@@ -1,13 +1,15 @@
 ﻿using System.Drawing;
 using Emgu.CV;
+using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
+using LorAuto.OCR;
 
 namespace LorAuto.Extensions;
 
 /// <summary>
 /// Provides extension methods for <see cref="Image{TColor,TDepth}"/>.
 /// </summary>
-public static class CvImageExtensions
+internal static class CvImageExtensions
 {
     /// <summary>
     /// Crops the image using the specified rectangle.
@@ -80,5 +82,29 @@ public static class CvImageExtensions
         using Image<Gray, byte> targetAndMaskGray = InHsvRange(image, lower, higher);
 
         return CvInvoke.CountNonZero(targetAndMaskGray);
+    }
+
+    public static (int Number, float Confidence) ReadNumberFromImage<TColor, TDepth>(this Image<TColor, TDepth> image, OcrHelper ocr, IEnumerable<(Hsv Lower, Hsv Higher)> recognizeColors)
+        where TColor : struct, IColor where TDepth : new()
+    {
+        var ret = new List<(int Num, float Confidence)>();
+
+        foreach ((Hsv lower, Hsv higher) in recognizeColors)
+        {
+            using Image<Gray, byte> inRangeImg = image.InHsvRange(lower, higher);
+            int countNonZero = CvInvoke.CountNonZero(inRangeImg);
+            if (countNonZero == 0)
+                continue;
+
+            using Image<Gray, byte> resizeImg = inRangeImg.Resize(120, 120, Inter.Linear);
+            (int number, float confidence) = ocr.ReadNumber(resizeImg);
+
+            if (number == -1)
+                continue;
+
+            ret.Add((number, confidence));
+        }
+
+        return ret.Count > 0 ? ret.MaxBy(x => x.Confidence) : (-1, 0);
     }
 }

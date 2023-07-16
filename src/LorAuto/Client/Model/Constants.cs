@@ -1,6 +1,6 @@
 ﻿namespace LorAuto.Client.Model;
 
-public static class Constants
+internal static class Constants
 {
     public readonly static byte[][] Zero =
     {

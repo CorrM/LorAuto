@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto.Cli", "src\LorAuto.
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{DC95812C-B749-4AD3-8993-E630CE8DAEE5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LorAuto.Strategy.Generic", "src\LorAuto.Strategy.Generic\LorAuto.Strategy.Generic.csproj", "{0D1CB9B6-2448-4803-9617-58668193A41F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,6 +28,10 @@ Global
 		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BFBCFD3A-06A9-48AA-A2CD-68D02B57002C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D1CB9B6-2448-4803-9617-58668193A41F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D1CB9B6-2448-4803-9617-58668193A41F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D1CB9B6-2448-4803-9617-58668193A41F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D1CB9B6-2448-4803-9617-58668193A41F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{CBF765CD-FE0A-45AA-8508-CF59F7BF6F8E} = {DC95812C-B749-4AD3-8993-E630CE8DAEE5}

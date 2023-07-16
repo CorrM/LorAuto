@@ -139,4 +139,35 @@ public sealed class GameComponentLocator
 
         return (r1, r2);
     }
+
+    /// <summary>
+    /// Gets the rectangles representing the player's and opponent's Nexus health positions.
+    /// </summary>
+    /// <returns>A tuple containing the rectangles for the player's and opponent's Nexus health.</returns>
+    public (Rectangle Player, Rectangle Opponent) GetNexusHealthRect()
+    {
+        const int w = 60; // TODO: Should be ratio
+        const int h = 50; // TODO: Should be ratio
+
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.1510);
+
+        int oy = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.3703);
+        int py = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.5833);
+
+        return (new Rectangle(x, py, w, h), new Rectangle(x, oy, w, h));
+    }
+
+    /// <summary>
+    /// Gets the rectangles representing the player's and opponent's Nexus positions.
+    /// </summary>
+    /// <returns>A tuple containing the rectangles for the player's and opponent's Nexus.</returns>
+    public (Point Player, Point Opponent) GetNexusPossition()
+    {
+        int x = (int)Math.Ceiling(_stateMachine.WindowSize.Width * 0.1302);
+
+        int oy = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.3888);
+        int py = (int)Math.Ceiling(_stateMachine.WindowSize.Height * 0.6018);
+
+        return (new Point(x, py), new Point(x, oy));
+    }
 }

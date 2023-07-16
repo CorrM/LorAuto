@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Drawing;
 using Emgu.CV;
-using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using LorAuto.Card;
 using LorAuto.Card.Model;
@@ -29,6 +28,7 @@ public sealed class StateMachine : IDisposable
 
     private GameResultApiResponse? _gameResult;
     private CardPositionsApiResponse? _gameData;
+    private readonly (Hsv Lower, Hsv Higher)[] _recognizeColors;
 
     /// <summary>
     /// Gets the handle of the game window.
@@ -66,24 +66,14 @@ public sealed class StateMachine : IDisposable
     public EGameState GameState { get; private set; }
 
     /// <summary>
-    /// Gets the cards present on the game board.
+    /// Gets the game board data.
     /// </summary>
-    public BoardCards CardsOnBoard { get; }
+    public GameBoardData BoardDate { get; }
 
     /// <summary>
     /// Gets the active deck information.
     /// </summary>
     public ActiveDeckApiResponse ActiveDeck { get; }
-
-    /// <summary>
-    /// Gets the current mana count.
-    /// </summary>
-    public int Mana { get; private set; }
-
-    /// <summary>
-    /// Gets the current spell mana count.
-    /// </summary>
-    public int SpellMana { get; private set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StateMachine"/> class with the specified card sets manager and game client port.
@@ -101,9 +91,19 @@ public sealed class StateMachine : IDisposable
             Constants.Five, Constants.Six, Constants.Seven, Constants.Eight, Constants.Nine, Constants.Ten
         };
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
+        _recognizeColors = new (Hsv Lower, Hsv Higher)[]
+        {
+            (new Hsv(0, 0, 230), new Hsv(0, 0, 255)), // White
+            (new Hsv(0, 0, 230), new Hsv(180, 70, 255)), // White
+            (new Hsv(30, 80, 80), new Hsv(180, 255, 255)), // Green
+            (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
+            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
+            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
+            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Frost
+        };
 
         ComponentLocator = new GameComponentLocator(this);
-        CardsOnBoard = new BoardCards();
+        BoardDate = new GameBoardData();
         ActiveDeck = new ActiveDeckApiResponse() { DeckCode = null, CardsInDeck = new Dictionary<string, int>() };
         //User32.SetProcessDPIAware();
     }
@@ -296,35 +296,35 @@ public sealed class StateMachine : IDisposable
         switch (cardPosition)
         {
             case EInGameCardPosition.Mulligan:
-                CardsOnBoard.CardsMulligan.Add(card);
+                BoardDate.Cards.CardsMulligan.Add(card);
                 break;
 
             case EInGameCardPosition.Hand:
-                CardsOnBoard.CardsHand.Add(card);
+                BoardDate.Cards.CardsHand.Add(card);
                 break;
 
             case EInGameCardPosition.Board:
-                CardsOnBoard.CardsBoard.Add(card);
+                BoardDate.Cards.CardsBoard.Add(card);
                 break;
 
             case EInGameCardPosition.AttackOrBlock:
-                CardsOnBoard.CardsAttackOrBlock.Add(card);
+                BoardDate.Cards.CardsAttackOrBlock.Add(card);
                 break;
 
             case EInGameCardPosition.SpellStack:
-                CardsOnBoard.SpellStack.Add(card);
+                BoardDate.Cards.SpellStack.Add(card);
                 break;
 
             case EInGameCardPosition.OpponentAttackOrBlock:
-                CardsOnBoard.OpponentCardsAttackOrBlock.Add(card);
+                BoardDate.Cards.OpponentCardsAttackOrBlock.Add(card);
                 break;
 
             case EInGameCardPosition.OpponentBoard:
-                CardsOnBoard.OpponentCardsBoard.Add(card);
+                BoardDate.Cards.OpponentCardsBoard.Add(card);
                 break;
 
             case EInGameCardPosition.OpponentHand:
-                CardsOnBoard.OpponentCardsHand.Add(card);
+                BoardDate.Cards.OpponentCardsHand.Add(card);
                 break;
 
             case EInGameCardPosition.None:
@@ -332,79 +332,36 @@ public sealed class StateMachine : IDisposable
                 throw new UnreachableException();
         }
 
-        CardsOnBoard.AllCards.Add(card);
+        BoardDate.Cards.AllCards.Add(card);
     }
 
     /// <summary>
-    /// Updates the attack and health values of the playable card.
+    /// Updates the attack and health values of card in board.
     /// </summary>
-    /// <param name="card">The playable card.</param>
+    /// <param name="card">The board card.</param>
     /// <param name="frames">The frames of the game window.</param>
-    private void UpdatePlayableCardAttackHealth(InGameCard card, Image<Bgr, byte>[] frames)
+    private void UpdateBoardCardAttackHealth(InGameCard card, Image<Bgr, byte>[] frames)
     {
-        var colors = new (Hsv Lower, Hsv Higher)[]
-        {
-            (new Hsv(0, 0, 230), new Hsv(0, 0, 255)), // White
-            (new Hsv(30, 80, 80), new Hsv(180, 255, 255)), // Green
-            (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
-            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
-            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
-            // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Frost
-        };
-
-        (int Number, float Confidence) ReadNumberFromImage(Image<Bgr, byte> img)
-        {
-            var ret = new List<(int Num, float Confidence)>();
-
-            foreach ((Hsv lower, Hsv higher) in colors)
-            {
-                using Image<Gray, byte> inRangeImg = img.InHsvRange(lower, higher);
-                int countNonZero = CvInvoke.CountNonZero(inRangeImg);
-                if (countNonZero == 0)
-                    continue;
-
-                using Image<Gray, byte> resizeImg = inRangeImg.Resize(120, 120, Inter.Linear);
-                (int number, float confidence) = _ocrHelper.ReadNumber(resizeImg);
-
-                if (number == -1)
-                    continue;
-
-                ret.Add((number, confidence));
-            }
-
-            return ret.Count > 0 ? ret.MaxBy(x => x.Confidence) : (-1, 0);
-        }
-
-        Image<Bgr, byte> image = frames.First();
+        Image<Bgr, byte> image = frames[0];
         (Rectangle attackRect, Rectangle healthRect) = ComponentLocator.GetCardAttackAndHealthRect(card);
 
         // Attack
         using Image<Bgr, byte> attackCropImg = image.Crop(attackRect);
-        (int attackNumber, float attackConfidence) = ReadNumberFromImage(attackCropImg);
+        (int attackNumber, float _) = attackCropImg.ReadNumberFromImage(_ocrHelper, _recognizeColors);
 
         //Console.WriteLine($"Card ({card.Name}), ATTACK: {attackNumber}, Confidence: {attackConfidence}");
 
         if (attackNumber == -1)
-        {
-            // CvInvoke.Imshow("attackNumber", attackRangeImg);
-            // CvInvoke.WaitKey();
-            // CvInvoke.DestroyAllWindows();
             return;
-        }
 
         // Health
         using Image<Bgr, byte> hpCropImg = image.Crop(healthRect);
-        (int hpNumber, float hpConfidence) = ReadNumberFromImage(hpCropImg);
+        (int hpNumber, float _) = hpCropImg.ReadNumberFromImage(_ocrHelper, _recognizeColors);
 
         // Console.WriteLine($"Card ({card.Name}), HEALTH: {hpNumber}, Confidence: {hpConfidence}");
 
-        if (hpNumber == -1) // Number 5 not work
-        {
-            // CvInvoke.Imshow("attackNumber", hpCropImg);
-            // CvInvoke.WaitKey();
-            // CvInvoke.DestroyAllWindows();
+        if (hpNumber == -1)
             return;
-        }
 
         card.UpdateAttackHealth(attackNumber, hpNumber);
     }
@@ -417,10 +374,10 @@ public sealed class StateMachine : IDisposable
     private async Task UpdateCardsOnBoardAsync(Image<Bgr, byte>[] frames, CancellationToken ct = default)
     {
         // Store cards references so we can update the card data in-place
-        List<InGameCard> previousCards = CardsOnBoard.AllCards.ToList();
+        List<InGameCard> previousCards = BoardDate.Cards.AllCards.ToList();
 
         // Clear board state before update
-        CardsOnBoard.Clear();
+        BoardDate.Cards.Clear();
 
         // !Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
         (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
@@ -454,7 +411,7 @@ public sealed class StateMachine : IDisposable
             switch (cardPosition)
             {
                 case EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock:
-                    UpdatePlayableCardAttackHealth(inGameCard, frames);
+                    UpdateBoardCardAttackHealth(inGameCard, frames);
                     break;
 
                 case EInGameCardPosition.Hand: // Update hand card cost
@@ -464,7 +421,7 @@ public sealed class StateMachine : IDisposable
         }
 
         // Some times opponent attacking cards are right to left
-        CardsOnBoard.Sort();
+        BoardDate.Cards.Sort();
     }
 
     /// <summary>
@@ -481,7 +438,7 @@ public sealed class StateMachine : IDisposable
             return EGameState.Hold;
 
         // # Menus
-        Image<Bgr, byte> lastFrame = frames.First();
+        Image<Bgr, byte> lastFrame = frames[0];
         if (_gameData.GameState == "Menus")
         {
             // # Menus deck selected
@@ -523,18 +480,8 @@ public sealed class StateMachine : IDisposable
             return PlayerCanInteract(lastFrame) ? EGameState.Mulligan : EGameState.UserInteractNotReady;
 
         // # Block
-        if (CardsOnBoard.OpponentCardsAttackOrBlock.Count > 0)
-        {
-            if (!PlayerCanInteract(lastFrame))
-                return EGameState.UserInteractNotReady;
-
-            //if ()
-            //{
-            //    
-            //}
-
-            return EGameState.Blocking;
-        }
+        if (BoardDate.Cards.OpponentCardsAttackOrBlock.Count > 0)
+            return !PlayerCanInteract(lastFrame) ? EGameState.UserInteractNotReady : EGameState.Blocking;
 
         // # Check if it's our turn
         if (!PlayerCanInteract(lastFrame))
@@ -619,7 +566,7 @@ public sealed class StateMachine : IDisposable
     /// <returns>The current spell mana count.</returns>
     private int GetSpellMana(Image<Bgr, byte>[] frames)
     {
-        Image<Bgr, byte> lastFrame = frames.First();
+        Image<Bgr, byte> lastFrame = frames[0];
         Rectangle[] spellManaRect = ComponentLocator.GetSpellManaRect();
 
         int spellMana = 0;
@@ -634,6 +581,30 @@ public sealed class StateMachine : IDisposable
         }
 
         return Math.Min(3, spellMana);
+    }
+
+    /// <summary>
+    /// Gets the current Nexus health values for the player and the opponent from a series of frames.
+    /// </summary>
+    /// <param name="frames">The array of frames containing the game state.</param>
+    /// <returns>A tuple containing the current Nexus health values for the player and the opponent.</returns>
+    private (int NexusHealth, int OpponentNexusHealth) GetNexusHealth(Image<Bgr, byte>[] frames)
+    {
+        var color = new[] { (new Hsv(0, 0, 230), new Hsv(180, 70, 255)) }; // White
+        Image<Bgr, byte> image = frames[0];
+        (Rectangle player, Rectangle opponent) = ComponentLocator.GetNexusHealthRect();
+
+        using Image<Bgr, byte> playerCropImg = image.Crop(player);
+        (int playerNumber, float _) = playerCropImg.ReadNumberFromImage(_ocrHelper, color);
+        if (playerNumber == -1)
+            return (-1, -1);
+
+        using Image<Bgr, byte> opponentCropImg = image.Crop(opponent);
+        (int opponentNumber, float _) = opponentCropImg.ReadNumberFromImage(_ocrHelper, color);
+        if (opponentNumber == -1)
+            return (-1, -1);
+
+        return (playerNumber, opponentNumber);
     }
 
     /// <summary>
@@ -665,25 +636,24 @@ public sealed class StateMachine : IDisposable
 
         // Game
         GameState = GetGameState(frames);
-        Mana = GetMana(frames);
-        SpellMana = GetSpellMana(frames);
+        BoardDate.Mana = GetMana(frames);
+        BoardDate.SpellMana = GetSpellMana(frames);
+        (BoardDate.NexusHealth, BoardDate.OpponentNexusHealth) = GetNexusHealth(frames);
 
         // Clean
         foreach (Image<Bgr, byte> frame in frames)
             frame.Dispose();
 
         bool isMyTurn = GameState is EGameState.Attacking or EGameState.Blocking or EGameState.AttackTurn or EGameState.DefendTurn;
-        if (isMyTurn && Mana == -1)
+        if (isMyTurn && BoardDate.Mana == -1)
             await Console.Error.WriteLineAsync("Unknown mana").ConfigureAwait(false);
 
         if (GameState != EGameState.End)
             return;
 
-        CardsOnBoard.Clear();
-        Mana = 0;
-        SpellMana = 0;
-        // prev_mana = 0;
-        // turn = 0;
+        BoardDate.Cards.Clear();
+        BoardDate.Mana = 0;
+        BoardDate.SpellMana = 0;
     }
 
     /// <summary>

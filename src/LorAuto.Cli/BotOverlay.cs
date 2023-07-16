@@ -84,11 +84,11 @@ public sealed class BotOverlay : IDisposable
         {
             DrawSpellMana(gBrush);
 
-            for (int i = 0; i < _stateMachine.CardsOnBoard.AllCards.Count; i++)
+            for (int i = 0; i < _stateMachine.BoardDate.Cards.AllCards.Count; i++)
             {
                 try
                 {
-                    InGameCard card = _stateMachine.CardsOnBoard.AllCards[i];
+                    InGameCard card = _stateMachine.BoardDate.Cards.AllCards[i];
                     DrawCard(gBrush, card);
                 }
                 catch

@@ -3,8 +3,8 @@ using LorAuto.Bot.Model;
 using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
-using LorAuto.Strategies;
-using LorAuto.Strategies.Model;
+using LorAuto.Strategy;
+using LorAuto.Strategy.Model;
 using Microsoft.Extensions.Logging;
 
 namespace LorAuto.Bot;
@@ -19,22 +19,26 @@ do
 */
 
 /// <summary>
-/// Plays the game, responsible for executing commands from <see cref="Strategy"/>
+/// Plays the game, responsible for executing commands from <see cref="StrategyBase"/>
 /// </summary>
 public sealed class LorBot
 {
-    /*
-     NOTES:
-     - Every method that effect or interact with cards must to update StateMachine before return
-    */
     private readonly StateMachine _stateMachine;
-    private readonly Strategy _strategy;
+    private readonly StrategyBase _strategy;
     private readonly EGameRotation _gameRotation;
     private readonly bool _isPvp;
     private readonly ILogger? _logger;
     private readonly UserSimulator _userSimulator;
 
-    public LorBot(StateMachine stateMachine, Strategy strategy, EGameRotation gameRotation, bool isPvp, ILogger? logger)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LorBot"/> class with the specified dependencies.
+    /// </summary>
+    /// <param name="stateMachine">The state machine for game state management.</param>
+    /// <param name="strategy">The strategy to be used for decision making.</param>
+    /// <param name="gameRotation">The game rotation to be used.</param>
+    /// <param name="isPvp">Specifies whether the bot is playing against a human player.</param>
+    /// <param name="logger">The logger for logging bot actions (optional).</param>
+    public LorBot(StateMachine stateMachine, StrategyBase strategy, EGameRotation gameRotation, bool isPvp, ILogger? logger)
     {
         _stateMachine = stateMachine;
         _strategy = strategy;
@@ -45,19 +49,23 @@ public sealed class LorBot
         _userSimulator = new UserSimulator(_stateMachine);
     }
 
+    /// <summary>
+    /// Performs the Mulligan phase of the game.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
     private async Task MulliganAsync(CancellationToken ct = default)
     {
         // Wait before do any action
-        while (_stateMachine.CardsOnBoard.CardsMulligan.Count != 4)
+        while (_stateMachine.BoardDate.Cards.CardsMulligan.Count != 4)
         {
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             await Task.Delay(1000, ct).ConfigureAwait(false);
         }
 
-        IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.CardsOnBoard.CardsMulligan);
+        IEnumerable<InGameCard> cardsToReplace = _strategy.Mulligan(_stateMachine.BoardDate.Cards.CardsMulligan);
         foreach (InGameCard card in cardsToReplace)
         {
-            if (!_stateMachine.CardsOnBoard.CardsMulligan.Contains(card))
+            if (!_stateMachine.BoardDate.Cards.CardsMulligan.Contains(card))
                 continue;
 
             _userSimulator.ClickCard(card);
@@ -68,20 +76,21 @@ public sealed class LorBot
         _userSimulator.ResetMousePosition();
 
         // Wait mulligan
-        for (int i = 0; _stateMachine.CardsOnBoard.CardsMulligan.Count == 0 && i < 10; ++i)
+        for (int i = 0; _stateMachine.BoardDate.Cards.CardsMulligan.Count == 0 && i < 10; ++i)
         {
             await Task.Delay(1000, ct).ConfigureAwait(false);
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         }
     }
 
+    /// <summary>
+    /// Performs the Block phase of the game.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
     private async Task BlockAsync(CancellationToken ct = default)
     {
-        Dictionary<InGameCard, IEnumerable<InGameCard>?>? spellsToUse;
-        IEnumerable<InGameCard>? abilitiesToUse;
-        Dictionary<InGameCard, InGameCard> blockCards = _strategy.Block(_stateMachine.CardsOnBoard, out spellsToUse, out abilitiesToUse);
+        Dictionary<InGameCard, InGameCard> blockCards = _strategy.Block(_stateMachine.BoardDate, out List<CardTargetSelector>? spellsToUse);
 
-        // TODO: Use `spellsToUse` and `abilitiesToUse`
         foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
         {
             // Update before block
@@ -89,7 +98,7 @@ public sealed class LorBot
 
             // Check if card is already blocked
             bool isBlockable = true;
-            foreach (InGameCard allyCard in _stateMachine.CardsOnBoard.CardsAttackOrBlock)
+            foreach (InGameCard allyCard in _stateMachine.BoardDate.Cards.CardsAttackOrBlock)
             {
                 if (Math.Abs(allyCard.TopCenterPos.X - opponentCard.TopCenterPos.X) >= 10)
                     continue;
@@ -105,6 +114,17 @@ public sealed class LorBot
             await Task.Delay(Random.Shared.Next(600, 800), ct).ConfigureAwait(false);
         }
 
+        if (spellsToUse is not null)
+        {
+            foreach (CardTargetSelector selector in spellsToUse)
+            {
+                await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
+                _userSimulator.PlayCardFromHand(selector.GetSelectedCard(), selector);
+
+                await Task.Delay(Random.Shared.Next(600, 800), ct).ConfigureAwait(false);
+            }
+        }
+
         _userSimulator.CommitOrPassOrSkipTurn();
         _userSimulator.ResetMousePosition();
 
@@ -116,52 +136,59 @@ public sealed class LorBot
         }
     }
 
-    private async Task<bool> PlayCardFromHandAsync(List<InGameCard> playableCards, CancellationToken ct = default)
+    /// <summary>
+    /// Plays a card from the hand.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
+    /// <returns><c>true</c> if a card is played; otherwise, <c>false</c>.</returns>
+    private async Task<bool> PlayCardFromHandAsync(CancellationToken ct = default)
     {
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
-        // Play cards from hand
-        if (playableCards.Count == 0)
-            return false;
-
-        (InGameCard HandCard, List<InGameCard?>? Targets)? playHandCard = _strategy.PlayHandCard(
-            _stateMachine.CardsOnBoard,
+        (InGameCard HandCard, CardTargetSelector? Target)? playHandCard = _strategy.PlayHandCard(
+            _stateMachine.BoardDate,
             _stateMachine.GameState,
-            _stateMachine.Mana,
-            _stateMachine.SpellMana,
-            playableCards);
+            _stateMachine.BoardDate.Mana,
+            _stateMachine.BoardDate.SpellMana);
 
         if (playHandCard is null)
+        {
+            await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
             return false;
+        }
 
-        // TODO: use playHandCard.Targets
-        _userSimulator.PlayCardFromHand(playHandCard.Value.HandCard /*, playHandCard.Value.Targets*/);
-
+        _userSimulator.PlayCardFromHand(playHandCard.Value.HandCard, playHandCard.Value.Target);
         _userSimulator.ResetMousePosition();
 
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
         return true;
     }
 
+    /// <summary>
+    /// Handles stuff needs to be done before the DefendTurn or AttackTurn phase of the game.
+    /// </summary>
+    /// <param name="gameState">The current game state.</param>
+    /// <param name="ct">The cancellation token (optional).</param>
+    /// <returns><c>true</c> if an action is handled; otherwise, <c>false</c>.</returns>
     private async Task<bool> PreDefendOrAttackAsync(EGameState gameState, CancellationToken ct = default)
     {
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
         // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
-        if (_stateMachine.CardsOnBoard.SpellStack.Count != 0 && _stateMachine.CardsOnBoard.SpellStack.All(card => card.Type is EGameCardType.Spell or EGameCardType.Ability))
+        if (_stateMachine.BoardDate.Cards.SpellStack.Count != 0 && _stateMachine.BoardDate.Cards.SpellStack.All(card => card.Type is EGameCardType.Spell or EGameCardType.Ability))
         {
             _userSimulator.CommitOrPassOrSkipTurn();
-            await Task.Delay(_stateMachine.CardsOnBoard.SpellStack.Count * 2500, ct).ConfigureAwait(false);
+            await Task.Delay(_stateMachine.BoardDate.Cards.SpellStack.Count * 2500, ct).ConfigureAwait(false);
 
             return true;
         }
 
         // Determinate what to do
         EGamePlayAction gamePlayAction = gameState == EGameState.DefendTurn
-            ? _strategy.RespondToOpponentAction(_stateMachine.CardsOnBoard, _stateMachine.GameState, _stateMachine.Mana, _stateMachine.SpellMana)
-            : _strategy.AttackTokenUsage(_stateMachine.CardsOnBoard, _stateMachine.Mana, _stateMachine.SpellMana);
+            ? _strategy.RespondToOpponentAction(_stateMachine.BoardDate, _stateMachine.GameState, _stateMachine.BoardDate.Mana, _stateMachine.BoardDate.SpellMana)
+            : _strategy.AttackTokenUsage(_stateMachine.BoardDate, _stateMachine.BoardDate.Mana, _stateMachine.BoardDate.SpellMana);
         if (gamePlayAction == EGamePlayAction.Skip)
         {
             _userSimulator.CommitOrPassOrSkipTurn();
@@ -171,16 +198,12 @@ public sealed class LorBot
             return true;
         }
 
-        List<InGameCard> playableCards = _stateMachine.CardsOnBoard.CardsHand
-            .Where(card => card.Cost <= _stateMachine.Mana || (card.Type == EGameCardType.Spell && card.Cost <= _stateMachine.Mana + _stateMachine.SpellMana))
-            .OrderByDescending(card => card.Cost)
-            .ToList();
-
         // Play card from hand
+        List<InGameCard> playableCards = _strategy.GetPlayableHandCards(_stateMachine.BoardDate.Cards, _stateMachine.BoardDate.Mana, _stateMachine.BoardDate.SpellMana);
         if (playableCards.Count <= 0 || gamePlayAction != EGamePlayAction.PlayCards)
             return false;
 
-        bool thereCardPlayed = await PlayCardFromHandAsync(playableCards, ct).ConfigureAwait(false);
+        bool thereCardPlayed = await PlayCardFromHandAsync(ct).ConfigureAwait(false);
         if (!thereCardPlayed)
             return false;
 
@@ -190,6 +213,10 @@ public sealed class LorBot
         return true;
     }
 
+    /// <summary>
+    /// Handles the DefendTurn phase of the game.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
     private async Task DefendAsync(CancellationToken ct = default)
     {
         bool actionHandled = await PreDefendOrAttackAsync(EGameState.DefendTurn, ct).ConfigureAwait(false);
@@ -204,6 +231,10 @@ public sealed class LorBot
         _userSimulator.ResetMousePosition();
     }
 
+    /// <summary>
+    /// Handles the AttackTurn phase of the game.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
     private async Task AttackAsync(CancellationToken ct = default)
     {
         bool actionHandled = await PreDefendOrAttackAsync(EGameState.Attacking, ct).ConfigureAwait(false);
@@ -214,10 +245,10 @@ public sealed class LorBot
         }
 
         // Attack
-        List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.CardsOnBoard, _stateMachine.CardsOnBoard.CardsBoard);
+        List<InGameCard> cardsToAttack = _strategy.Attack(_stateMachine.BoardDate, _stateMachine.BoardDate.Cards.CardsBoard);
         foreach (InGameCard atkCard in cardsToAttack)
         {
-            _userSimulator.PlayBoardCard(atkCard);
+            _userSimulator.MoveBoardCardToField(atkCard);
 
             await Task.Delay(Random.Shared.Next(300, 400), ct).ConfigureAwait(false);
 
@@ -238,6 +269,10 @@ public sealed class LorBot
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Processes the game and performs appropriate actions based on the current game state.
+    /// </summary>
+    /// <param name="ct">The cancellation token (optional).</param>
     public async Task ProcessAsync(CancellationToken ct = default)
     {
         // TODO: When attack then opponent set block cards then you have spell cards
