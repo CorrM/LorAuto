@@ -3,7 +3,6 @@ using LorAuto.Bot;
 using LorAuto.Bot.Model;
 using LorAuto.Card;
 using LorAuto.Client;
-using LorAuto.Strategy;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
@@ -84,15 +83,7 @@ public sealed class BotCommand : RootCommand
         using ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
         ILogger<LorBot> botLogger = loggerFactory.CreateLogger<LorBot>();
 
-        Type strategyType = typeof(StrategyBase);
-        Type? strategyToUse = typeof(StrategyBase).Assembly.GetTypes()
-            .Where(t => t.IsAssignableTo(strategyType) && t != strategyType)
-            .FirstOrDefault(t => string.Equals(t.Name, strategy, StringComparison.CurrentCultureIgnoreCase) || string.Equals(t.Name, $"{strategy}Strategy", StringComparison.CurrentCultureIgnoreCase));
-        if (strategyToUse is null)
-            throw new Exception($"Strategy '{strategy}' not found.");
-
-        Log.Logger.Information("Bot start using '{Strategy}'", strategyToUse.Name);
-        var bot = new LorBot(stateMachine, (StrategyBase)Activator.CreateInstance(strategyToUse)!, gameRotation, isPvpGame, botLogger);
+        using var bot = new LorBot(stateMachine, strategy, gameRotation, isPvpGame, botLogger);
         while (!ct.IsCancellationRequested)
         {
             //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();

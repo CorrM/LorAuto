@@ -3,11 +3,11 @@ using System.Drawing;
 using GregsStack.InputSimulatorStandard;
 using GregsStack.InputSimulatorStandard.Native;
 using LorAuto.Bot.Model;
+using LorAuto.Card;
 using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
-using LorAuto.Strategy.Model;
 using PInvoke;
 
 namespace LorAuto;

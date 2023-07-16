@@ -1,4 +1,4 @@
-﻿namespace LorAuto.Strategy.Model;
+﻿namespace LorAuto.Card.Model;
 
 /// <summary>
 /// Represents the possible targets for a card.

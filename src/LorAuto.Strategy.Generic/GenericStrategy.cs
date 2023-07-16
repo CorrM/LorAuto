@@ -1,11 +1,26 @@
-﻿using LorAuto.Card.Model;
+﻿using LorAuto.Card;
+using LorAuto.Card.Model;
 using LorAuto.Client.Model;
-using LorAuto.Strategy.Model;
+using LorAuto.Plugin.Model;
+using LorAuto.Plugin.Types;
 
 namespace LorAuto.Strategy.Generic;
 
-public sealed class GenericStrategy : StrategyBase
+public sealed class GenericStrategy : StrategyPlugin
 {
+    public override PluginInfo PluginInformation { get; }
+
+    public GenericStrategy()
+    {
+        PluginInformation = new PluginInfo()
+        {
+            Name = "Generic",
+            Type = EPluginKind.Strategy,
+            Description = "Provides a versatile and customizable gameplay strategyB.",
+            SourceCodeLink = "https://github.com/CorrM/LorAuto"
+        };
+    }
+
     public override List<InGameCard> Mulligan(IEnumerable<InGameCard> mulliganCards)
     {
         return mulliganCards.Where(c => c.Cost > 3).ToList();
@@ -20,8 +35,6 @@ public sealed class GenericStrategy : StrategyBase
 
         if (cardToPlay is null)
             return null;
-
-        // CardTargetSelector.Select(cardToPlay).Target(cardToPlay);
 
         return (cardToPlay, null);
     }

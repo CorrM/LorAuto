@@ -1,10 +1,11 @@
 ﻿using System.Diagnostics;
 using LorAuto.Bot.Model;
+using LorAuto.Card;
 using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
-using LorAuto.Strategy;
-using LorAuto.Strategy.Model;
+using LorAuto.Plugin;
+using LorAuto.Plugin.Types;
 using Microsoft.Extensions.Logging;
 
 namespace LorAuto.Bot;
@@ -19,34 +20,46 @@ do
 */
 
 /// <summary>
-/// Plays the game, responsible for executing commands from <see cref="StrategyBase"/>
+/// Plays the game, responsible for executing commands from <see cref="StrategyPlugin"/>
 /// </summary>
-public sealed class LorBot
+public sealed class LorBot : IDisposable
 {
     private readonly StateMachine _stateMachine;
-    private readonly StrategyBase _strategy;
+    private readonly StrategyPlugin _strategy;
     private readonly EGameRotation _gameRotation;
     private readonly bool _isPvp;
     private readonly ILogger? _logger;
+    private readonly PluginLoader _pluginsLoader;
     private readonly UserSimulator _userSimulator;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LorBot"/> class with the specified dependencies.
     /// </summary>
     /// <param name="stateMachine">The state machine for game state management.</param>
-    /// <param name="strategy">The strategy to be used for decision making.</param>
+    /// <param name="strategyPluginName">The strategy plugin name to be used for decision making.</param>
     /// <param name="gameRotation">The game rotation to be used.</param>
     /// <param name="isPvp">Specifies whether the bot is playing against a human player.</param>
     /// <param name="logger">The logger for logging bot actions (optional).</param>
-    public LorBot(StateMachine stateMachine, StrategyBase strategy, EGameRotation gameRotation, bool isPvp, ILogger? logger)
+    public LorBot(StateMachine stateMachine, string strategyPluginName, EGameRotation gameRotation, bool isPvp, ILogger? logger)
     {
         _stateMachine = stateMachine;
-        _strategy = strategy;
         _gameRotation = gameRotation;
         _isPvp = isPvp;
         _logger = logger;
 
+        _pluginsLoader = new PluginLoader();
         _userSimulator = new UserSimulator(_stateMachine);
+
+        _strategy = GetStrategy(strategyPluginName);
+    }
+
+    private StrategyPlugin GetStrategy(string strategyName)
+    {
+        if (_pluginsLoader.GetPluginInstance(strategyName) is not StrategyPlugin pluginInstance)
+            throw new Exception($"Strategy '{strategyName}' not found.");
+
+        _logger?.LogInformation("Bot start using '{Strategy}'", strategyName);
+        return pluginInstance;
     }
 
     /// <summary>
@@ -339,5 +352,13 @@ public sealed class LorBot
 
         // Move mouse to center after each play 
         _userSimulator.ResetMousePosition();
+    }
+
+    /// <summary>
+    /// Disposes the resources used by this instance.
+    /// </summary>
+    public void Dispose()
+    {
+        _pluginsLoader.Dispose();
     }
 }

@@ -30,7 +30,7 @@ cv2.setTrackbarPos('VMax', 'image', 255)
 hMin = sMin = vMin = hMax = sMax = vMax = 0
 phMin = psMin = pvMin = phMax = psMax = pvMax = 0
 
-while(1):
+while True:
     # Get current positions of all trackbars
     hMin = cv2.getTrackbarPos('HMin', 'image')
     sMin = cv2.getTrackbarPos('SMin', 'image')

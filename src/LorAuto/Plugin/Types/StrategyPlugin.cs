@@ -1,8 +1,8 @@
-﻿using LorAuto.Card.Model;
+﻿using LorAuto.Card;
+using LorAuto.Card.Model;
 using LorAuto.Client.Model;
-using LorAuto.Strategy.Model;
 
-namespace LorAuto.Strategy;
+namespace LorAuto.Plugin.Types;
 
 // TODO: What if bot want to summon but board is full (6 card in board)
 // TODO: Maybe add `AcceptAttack` and `AcceptBlock` to make sure cards are moved, as card could be stunned
@@ -10,7 +10,7 @@ namespace LorAuto.Strategy;
 /// <summary>
 /// Base class for implementing strategies.
 /// </summary>
-public abstract class StrategyBase
+public abstract class StrategyPlugin : PluginBase
 {
     /// <summary>
     /// Gets the list of playable hand cards based on the current board state and available resources.

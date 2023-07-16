@@ -1,6 +1,6 @@
 ﻿using LorAuto.Card.Model;
 
-namespace LorAuto.Strategy.Model;
+namespace LorAuto.Card;
 
 /// <summary>
 /// Represents a card target selector, used for specifying targets for a card's effect in board.

@@ -25,8 +25,8 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1"/>
-        <PackageReference Include="PInvoke.Gdi32" Version="0.7.124" />
-        <PackageReference Include="PInvoke.User32" Version="0.7.124" />
+        <PackageReference Include="PInvoke.Gdi32" Version="0.7.124"/>
+        <PackageReference Include="PInvoke.User32" Version="0.7.124"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -36,15 +36,6 @@
             <TargetPath>TessData\eng.traineddata</TargetPath>
         </ContentWithTargetPath>
         
-        <None Remove="RuntimeDep\runtime-x64\leptonica-1.82.0.dll" />
-        
-        <None Remove="RuntimeDep\runtime-x64\libleptonica-1.82.0.so" />
-        
-        <None Remove="RuntimeDep\runtime-x64\libtesseract50.so" />
-        
-        <None Remove="RuntimeDep\runtime-x64\tesseract50.dll" />
-        
-        <None Remove="HsvTunner.py" />
     </ItemGroup>
 
     <ItemGroup>

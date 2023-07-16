@@ -5,6 +5,8 @@ The bot utilizes image processing techniques to recognize the current game state
 
 **LorAuto** are Heavily inspired by this project [LoR-Bot](https://github.com/MOj0/LoR-Bot).
 
+if you think the structure of this project are overkill please check [Disclaimer](#disclaimer).
+
 ## Prerequisites
 
 - [.NET Desktop Runtime 7 x64](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-7.0.9-windows-x64-installer).
@@ -18,14 +20,21 @@ The bot utilizes image processing techniques to recognize the current game state
 ### Real-time card update
 
 Real-time card updates as the bot dynamically adjusts card attributes, such as Attack, Health and ~Keywords~, during gameplay.
+
 No longer fully confined to static data provided by the game client.
 
-### Strategies (play styles)
+### Plugin System
 
-Unleash your creativity and adaptability with our bot.
-Create strategy to fit your deck playstyle, allowing you to implement unique strategies that align perfectly with your card-set.
+Unleash your creativity and adaptability with our bot. Create strategies to fit your deck play-style,
+allowing you to implement unique strategies that align perfectly with your card-set.
+The bot also provides a plugin system that allows you to develop and integrate your own custom strategies seamlessly using C# or Python.
 
-Note that this bot has built-in strategy `generic` play style.
+With the plugin system, you can extend the bot capabilities and design tailored gameplay approaches, unlocking endless possibilities for your bot performance.
+Contribute to the bot strategy library by developing and sharing your plugins with the community, fostering a collaborative environment of strategy exploration and innovation.
+
+Note that the bot comes with a built-in strategy `generic` play style, but you have the flexibility to create and customize your own strategies using the plugin system.
+
+Feel free to experiment, enhance, and customize the bot behavior with your own strategies using the provided plugin system.
 
 ## How to run
 
@@ -47,3 +56,11 @@ If you would like to quit the application, you can press the `Ctrl-C` combinatio
 - [Emgu CV](https://github.com/emgucv/emgucv)
 - [IDisposableAnalyzers](https://github.com/DotNetAnalyzers/IDisposableAnalyzers)
 - [P/Invoke](https://github.com/dotnet/pinvoke)
+- [Python.NET](https://github.com/pythonnet/pythonnet)
+
+## Disclaimer
+
+**This project is a personal project undertaken during my free time with the aim of enhancing my skills in various fields.**
+**Contributions are welcome from the community to help improve the project.**
+**However, please note that this project is provided as-is and does not come with any guarantees or warranties.**
+**Use it at your own discretion and risk.**
