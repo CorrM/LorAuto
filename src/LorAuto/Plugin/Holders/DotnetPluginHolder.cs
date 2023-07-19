@@ -15,14 +15,6 @@ internal sealed class DotnetPluginHolder : PluginHolder
         _loader = new PluginLoadContext(pluginPath);
     }
 
-    protected override PluginInfo GetPluginInfo()
-    {
-        if (Instance is null)
-            throw new UnreachableException();
-
-        return Instance.PluginInformation;
-    }
-
     protected override Type GetPluginType()
     {
         // Check if dll is deleted
@@ -54,6 +46,14 @@ internal sealed class DotnetPluginHolder : PluginHolder
         }
 
         return pluginTypes[0];
+    }
+
+    protected override PluginInfo GetPluginInfo()
+    {
+        if (Instance is null)
+            throw new UnreachableException();
+
+        return Instance.PluginInformation;
     }
 
     protected override Version? GetTargetedSdkVersion()

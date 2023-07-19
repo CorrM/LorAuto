@@ -50,8 +50,8 @@ internal abstract class PluginHolder : IDisposable
         // ! Don't change order of these function calls
         PluginType = GetPluginType();
         Instance = GetPluginInstance();
-        PluginKind = GetPluginKind();
         PluginInfo = GetPluginInfo();
+        PluginKind = GetPluginKind();
 
         if (PluginKind == EPluginKind.Unknown)
             throw new PluginNotValidException(Id, PluginNotValidReason.UnknownPluginType);

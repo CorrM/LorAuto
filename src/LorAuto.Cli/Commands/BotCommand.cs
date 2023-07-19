@@ -16,29 +16,43 @@ public sealed class BotCommand : RootCommand
         var gameRotationOpt = new Option<EGameRotation>("-r", () => EGameRotation.Standard, "Game rotation to pick.");
         var strategyOpt = new Option<string>("-s", () => "generic", "Strategy bot will use.");
         var gamePortOpt = new Option<int>("-p", () => 21337, "Game client third party endpoints port.");
+        var pythonOpt = new Option<string>("-py", () => "3.11", "Game client third party endpoints port.");
         var noPvpGameOpt = new Option<bool>("--noPVP", () => false, "Play game against pvp or AI.");
+        var noPythonOpt = new Option<bool>("--noPython", () => false, "Disable python runtime also not load python plugin.");
         var overlayOpt = new Option<bool>("--overlay", () => false, "Show overlay on top of LoR that help to indicate and debug.");
 
         AddOption(gameRotationOpt);
         AddOption(strategyOpt);
         AddOption(gamePortOpt);
+        AddOption(pythonOpt);
         AddOption(noPvpGameOpt);
+        AddOption(noPythonOpt);
         AddOption(overlayOpt);
 
         this.SetHandler(async context =>
         {
             EGameRotation gameRotation = context.ParseResult.GetValueForOption(gameRotationOpt);
             string strategy = context.ParseResult.GetValueForOption(strategyOpt)!;
+            string pyVersion = context.ParseResult.GetValueForOption(pythonOpt)!;
             int gamePort = context.ParseResult.GetValueForOption(gamePortOpt);
             bool isPvpGame = !context.ParseResult.GetValueForOption(noPvpGameOpt);
+            bool enablePython = !context.ParseResult.GetValueForOption(noPythonOpt);
             bool overlay = context.ParseResult.GetValueForOption(overlayOpt);
             CancellationToken token = context.GetCancellationToken();
 
-            context.ExitCode = await CommandHandler(gameRotation, strategy, gamePort, isPvpGame, overlay, token);
+            context.ExitCode = await CommandHandler(gameRotation, strategy, gamePort, isPvpGame, overlay, enablePython, pyVersion, token);
         });
     }
 
-    private async Task<int> CommandHandler(EGameRotation gameRotation, string strategy, int gamePort, bool isPvpGame, bool showOverlay, CancellationToken ct)
+    private async Task<int> CommandHandler(
+        EGameRotation gameRotation,
+        string strategy,
+        int gamePort,
+        bool isPvpGame,
+        bool showOverlay,
+        bool enablePython,
+        string? pythonVer,
+        CancellationToken ct)
     {
         // # Logger
         Log.Logger = new LoggerConfiguration()
@@ -83,7 +97,18 @@ public sealed class BotCommand : RootCommand
         using ILoggerFactory loggerFactory = new SerilogLoggerFactory(Log.Logger);
         ILogger<LorBot> botLogger = loggerFactory.CreateLogger<LorBot>();
 
-        using var bot = new LorBot(stateMachine, strategy, gameRotation, isPvpGame, botLogger);
+        var botParams = new LorBotParams()
+        {
+            StateMachine = stateMachine,
+            StrategyPluginName = strategy,
+            GameRotation = gameRotation,
+            IsPvp = isPvpGame,
+            Logger = botLogger,
+            EnablePythonPlugins = enablePython,
+            PythonVersion = pythonVer,
+        };
+
+        using var bot = new LorBot(botParams);
         while (!ct.IsCancellationRequested)
         {
             //stateMachine.UpdateGameDataAsync().ConfigureAwait(false).GetAwaiter().GetResult();

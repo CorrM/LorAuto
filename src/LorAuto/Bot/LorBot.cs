@@ -35,22 +35,17 @@ public sealed class LorBot : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="LorBot"/> class with the specified dependencies.
     /// </summary>
-    /// <param name="stateMachine">The state machine for game state management.</param>
-    /// <param name="strategyPluginName">The strategy plugin name to be used for decision making.</param>
-    /// <param name="gameRotation">The game rotation to be used.</param>
-    /// <param name="isPvp">Specifies whether the bot is playing against a human player.</param>
-    /// <param name="logger">The logger for logging bot actions (optional).</param>
-    public LorBot(StateMachine stateMachine, string strategyPluginName, EGameRotation gameRotation, bool isPvp, ILogger? logger)
+    public LorBot(LorBotParams options)
     {
-        _stateMachine = stateMachine;
-        _gameRotation = gameRotation;
-        _isPvp = isPvp;
-        _logger = logger;
+        _stateMachine = options.StateMachine;
+        _gameRotation = options.GameRotation;
+        _isPvp = options.IsPvp;
+        _logger = options.Logger;
 
-        _pluginsLoader = new PluginLoader();
+        _pluginsLoader = new PluginLoader(options.EnablePythonPlugins, options.PythonVersion);
         _userSimulator = new UserSimulator(_stateMachine);
 
-        _strategy = GetStrategy(strategyPluginName);
+        _strategy = GetStrategy(options.StrategyPluginName);
     }
 
     private StrategyPlugin GetStrategy(string strategyName)

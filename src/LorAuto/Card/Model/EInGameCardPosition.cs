@@ -1,4 +1,4 @@
-﻿namespace LorAuto.Client.Model;
+﻿namespace LorAuto.Card.Model;
 
 /// <summary>
 /// Represents the possible positions of an in-game card.

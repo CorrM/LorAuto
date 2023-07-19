@@ -49,7 +49,7 @@ public abstract class StrategyPlugin : PluginBase
     /// </summary>
     /// <param name="boardData">The current game board data.</param>
     /// <param name="spellsToUse">Output parameter for the list of spell cards to use for blocking.</param>
-    /// <returns>A dictionary mapping opponent's board cards to the player's own board cards to block them.</returns>
+    /// <returns>A dictionary mapping player's own board cards to the opponent's board cards to block them.</returns>
     public abstract Dictionary<InGameCard, InGameCard> Block(GameBoardData boardData, out List<CardTargetSelector>? spellsToUse);
 
     /// <summary>

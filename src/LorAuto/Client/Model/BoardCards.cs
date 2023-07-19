@@ -1,4 +1,6 @@
-﻿namespace LorAuto.Card.Model;
+﻿using LorAuto.Card.Model;
+
+namespace LorAuto.Client.Model;
 
 /// <summary>
 /// Represents the collection of cards on the game board.

@@ -13,7 +13,7 @@ public sealed class PluginInfo
     /// <summary>
     /// Gets or initializes the type of the plugin.
     /// </summary>
-    public required EPluginKind Type { get; init; }
+    public required EPluginKind PluginKind { get; init; }
 
     /// <summary>
     /// Gets or initializes the description of the plugin.

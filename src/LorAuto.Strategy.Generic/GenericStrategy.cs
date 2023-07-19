@@ -15,7 +15,7 @@ public sealed class GenericStrategy : StrategyPlugin
         PluginInformation = new PluginInfo()
         {
             Name = "Generic",
-            Type = EPluginKind.Strategy,
+            PluginKind = EPluginKind.Strategy,
             Description = "Provides a versatile and customizable gameplay strategyB.",
             SourceCodeLink = "https://github.com/CorrM/LorAuto"
         };

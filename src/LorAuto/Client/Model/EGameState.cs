@@ -3,9 +3,6 @@
 /// <summary>
 /// Represents the possible states of the game.
 /// </summary>
-/// <summary>
-/// Represents the possible states of the game.
-/// </summary>
 public enum EGameState
 {
     /// <summary>

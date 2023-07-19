@@ -5,7 +5,7 @@ namespace LorAuto.Extensions;
 /// <summary>
 /// Provides extension methods for simulating mouse actions using the <see cref="IMouseSimulator"/> interface.
 /// </summary>
-public static class MouseSimulatorExtensions
+internal static class MouseSimulatorExtensions
 {
     /// <summary>
     /// Moves the mouse smoothly from the current position to the specified absolute coordinates.
