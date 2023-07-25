@@ -28,7 +28,7 @@ jobs:
       - name: Copy plugins
         run: |
           mkdir -p ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy
-          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/. ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
+          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
       
       - name: Upload artifact
         uses: actions/upload-artifact@v2
