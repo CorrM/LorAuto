@@ -30,6 +30,9 @@ jobs:
           mkdir -p ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy
           cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
       
+      - name: Zip release
+        run: zip release.zip ${{env.DOTNET_ROOT}}/LorAuto/* -r
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
@@ -39,7 +42,7 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: LorAuto
+          artifacts: release.zip
           makeLatest: true
           generateReleaseNotes: true
           draft: false
