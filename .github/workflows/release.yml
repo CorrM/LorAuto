@@ -24,7 +24,11 @@ jobs:
       - name: dotnet publish
         run: |
           dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
-        
+      
+      - name: Copy plugins
+        run: |
+          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/. ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
