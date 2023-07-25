@@ -104,7 +104,7 @@ public sealed class GenericStrategy : StrategyPlugin
     {
         return playerBoardCards
             .OrderBy(c => c.Description.Contains("Support:"))
-            .ThenBy(c => c.Attack)
+            .ThenByDescending(c => c.Attack)
             .ToList();
     }
 }

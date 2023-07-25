@@ -154,6 +154,8 @@ public sealed class LorBot : IDisposable
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
+        // TODO: What if card can predict
+        // TODO: What if card have To Play pick one option like (PETTY OFFICER)
         (InGameCard HandCard, CardTargetSelector? Target)? playHandCard = _strategy.PlayHandCard(
             _stateMachine.BoardDate,
             _stateMachine.GameState,
