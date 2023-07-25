@@ -39,7 +39,7 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ${{env.DOTNET_ROOT}}/LorAuto
+          artifacts: LorAuto
           makeLatest: true
           generateReleaseNotes: true
           draft: false
