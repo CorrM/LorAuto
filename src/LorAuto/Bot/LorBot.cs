@@ -42,7 +42,7 @@ public sealed class LorBot : IDisposable
         _isPvp = options.IsPvp;
         _logger = options.Logger;
 
-        _pluginsLoader = new PluginLoader(options.EnablePythonPlugins, options.PythonVersion);
+        _pluginsLoader = new PluginLoader();
         _userSimulator = new UserSimulator(_stateMachine);
 
         _strategy = GetStrategy(options.StrategyPluginName);

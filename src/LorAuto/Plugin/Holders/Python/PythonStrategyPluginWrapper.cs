@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿/*
+using System.Data;
 using LorAuto.Card;
 using LorAuto.Card.Model;
 using LorAuto.Client.Model;
@@ -126,3 +127,6 @@ internal sealed class PythonStrategyPluginWrapper : StrategyPlugin
         return resultAsList.Select(item => item.As<InGameCard>()).ToList();
     }
 }
+*/
+
+

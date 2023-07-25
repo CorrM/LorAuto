@@ -27,7 +27,6 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1"/>
         <PackageReference Include="PInvoke.Gdi32" Version="0.7.124"/>
         <PackageReference Include="PInvoke.User32" Version="0.7.124"/>
-        <PackageReference Include="pythonnet" Version="3.0.1"/>
     </ItemGroup>
 
     <ItemGroup>

@@ -16,31 +16,25 @@ public sealed class BotCommand : RootCommand
         var gameRotationOpt = new Option<EGameRotation>("-r", () => EGameRotation.Standard, "Game rotation to pick.");
         var strategyOpt = new Option<string>("-s", () => "generic", "Strategy bot will use.");
         var gamePortOpt = new Option<int>("-p", () => 21337, "Game client third party endpoints port.");
-        var pythonOpt = new Option<string>("-py", () => "3.11", "Game client third party endpoints port.");
         var noPvpGameOpt = new Option<bool>("--noPVP", () => false, "Play game against pvp or AI.");
-        var noPythonOpt = new Option<bool>("--noPython", () => false, "Disable python runtime also not load python plugin.");
         var overlayOpt = new Option<bool>("--overlay", () => false, "Show overlay on top of LoR that help to indicate and debug.");
 
         AddOption(gameRotationOpt);
         AddOption(strategyOpt);
         AddOption(gamePortOpt);
-        AddOption(pythonOpt);
         AddOption(noPvpGameOpt);
-        AddOption(noPythonOpt);
         AddOption(overlayOpt);
 
         this.SetHandler(async context =>
         {
             EGameRotation gameRotation = context.ParseResult.GetValueForOption(gameRotationOpt);
             string strategy = context.ParseResult.GetValueForOption(strategyOpt)!;
-            string pyVersion = context.ParseResult.GetValueForOption(pythonOpt)!;
             int gamePort = context.ParseResult.GetValueForOption(gamePortOpt);
             bool isPvpGame = !context.ParseResult.GetValueForOption(noPvpGameOpt);
-            bool enablePython = !context.ParseResult.GetValueForOption(noPythonOpt);
             bool overlay = context.ParseResult.GetValueForOption(overlayOpt);
             CancellationToken token = context.GetCancellationToken();
 
-            context.ExitCode = await CommandHandler(gameRotation, strategy, gamePort, isPvpGame, overlay, enablePython, pyVersion, token);
+            context.ExitCode = await CommandHandler(gameRotation, strategy, gamePort, isPvpGame, overlay, token);
         });
     }
 
@@ -50,8 +44,6 @@ public sealed class BotCommand : RootCommand
         int gamePort,
         bool isPvpGame,
         bool showOverlay,
-        bool enablePython,
-        string? pythonVer,
         CancellationToken ct)
     {
         // # Logger
@@ -104,8 +96,6 @@ public sealed class BotCommand : RootCommand
             GameRotation = gameRotation,
             IsPvp = isPvpGame,
             Logger = botLogger,
-            EnablePythonPlugins = enablePython,
-            PythonVersion = pythonVer,
         };
 
         using var bot = new LorBot(botParams);

@@ -29,16 +29,6 @@ public readonly struct LorBotParams
     public required bool IsPvp { get; init; }
 
     /// <summary>
-    /// Gets or initializes a value indicating whether to enable Python plugins.
-    /// </summary>
-    public required bool EnablePythonPlugins { get; init; }
-
-    /// <summary>
-    /// Gets or initializes the version of Python to be used with the plugins.
-    /// </summary>
-    public required string? PythonVersion { get; init; }
-
-    /// <summary>
     /// Gets or initializes the logger for logging bot actions (optional).
     /// </summary>
     public required ILogger? Logger { get; init; }
