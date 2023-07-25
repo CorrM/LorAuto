@@ -56,6 +56,7 @@ If you would like to quit the application, you can press the `Ctrl-C` combinatio
 - [Emgu CV](https://github.com/emgucv/emgucv)
 - [IDisposableAnalyzers](https://github.com/DotNetAnalyzers/IDisposableAnalyzers)
 - [P/Invoke](https://github.com/dotnet/pinvoke)
+- ChatGPT <3
 
 ## Disclaimer
 
