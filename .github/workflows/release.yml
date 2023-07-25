@@ -31,7 +31,7 @@ jobs:
           cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
       
       - name: Zip release
-        run: zip release.zip ${{env.DOTNET_ROOT}}/LorAuto/* -r
+        run: zip -j release.zip ${{env.DOTNET_ROOT}}/LorAuto/*
       
       - name: Upload artifact
         uses: actions/upload-artifact@v2
