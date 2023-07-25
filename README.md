@@ -27,7 +27,7 @@ No longer fully confined to static data provided by the game client.
 
 Unleash your creativity and adaptability with our bot. Create strategies to fit your deck play-style,
 allowing you to implement unique strategies that align perfectly with your card-set.
-The bot also provides a plugin system that allows you to develop and integrate your own custom strategies seamlessly using C# or Python.
+The bot also provides a plugin system that allows you to develop and integrate your own custom strategies seamlessly using C#.
 
 With the plugin system, you can extend the bot capabilities and design tailored gameplay approaches, unlocking endless possibilities for your bot performance.
 Contribute to the bot strategy library by developing and sharing your plugins with the community, fostering a collaborative environment of strategy exploration and innovation.
@@ -56,7 +56,6 @@ If you would like to quit the application, you can press the `Ctrl-C` combinatio
 - [Emgu CV](https://github.com/emgucv/emgucv)
 - [IDisposableAnalyzers](https://github.com/DotNetAnalyzers/IDisposableAnalyzers)
 - [P/Invoke](https://github.com/dotnet/pinvoke)
-- [Python.NET](https://github.com/pythonnet/pythonnet)
 
 ## Disclaimer
 
