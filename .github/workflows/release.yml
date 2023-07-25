@@ -35,7 +35,6 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: ${{env.DOTNET_ROOT}}/LorAuto
-          tag: ${{ github.ref#refs/tags/ }}
           makeLatest: true
           generateReleaseNotes: true
           draft: false
