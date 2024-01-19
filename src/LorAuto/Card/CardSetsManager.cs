@@ -13,7 +13,7 @@ public sealed class CardSetsManager
 {
     private readonly static HttpClient _httpClient;
 
-    private readonly string[] _forbiddenCardSets = { "set6ab" };
+    private readonly string[] _forbiddenCardSets = ["set6ab"];
     private readonly string _cardSetsDirName;
 
     /// <summary>
@@ -77,7 +77,12 @@ public sealed class CardSetsManager
             if (jsonObject is null)
                 throw new UnreachableException();
 
-            cardSetJson = JsonSerializer.Serialize(jsonObject, new JsonSerializerOptions() { WriteIndented = true });
+            cardSetJson = JsonSerializer.Serialize(jsonObject,
+                new JsonSerializerOptions()
+                {
+                    WriteIndented = true
+                }
+            );
         }
 
         await File.WriteAllTextAsync(cardSetPath, cardSetJson, ct);

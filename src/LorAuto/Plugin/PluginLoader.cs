@@ -15,7 +15,7 @@ internal sealed class PluginLoader : IDisposable
 
     public PluginLoader()
     {
-        _pluginDirNames = new string[] { "Strategy" };
+        _pluginDirNames = ["Strategy"];
         _pluginDir = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath)!, "Plugins");
         _plugins = new Dictionary<string, PluginHolder>();
 

@@ -87,24 +87,37 @@ public sealed class StateMachine : IDisposable
         _gameClientApi = new GameClientApi(gameClientPort);
         _manaMasks = new byte[][][]
         {
-            Constants.Zero, Constants.One, Constants.Two, Constants.Three, Constants.Four,
-            Constants.Five, Constants.Six, Constants.Seven, Constants.Eight, Constants.Nine, Constants.Ten
+            Constants.Zero,
+            Constants.One,
+            Constants.Two,
+            Constants.Three,
+            Constants.Four,
+            Constants.Five,
+            Constants.Six,
+            Constants.Seven,
+            Constants.Eight,
+            Constants.Nine,
+            Constants.Ten
         };
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
-        _recognizeColors = new (Hsv Lower, Hsv Higher)[]
-        {
+        _recognizeColors =
+        [
             (new Hsv(0, 0, 230), new Hsv(0, 0, 255)), // White
             (new Hsv(0, 0, 230), new Hsv(180, 70, 255)), // White
             (new Hsv(30, 80, 80), new Hsv(180, 255, 255)), // Green
             (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
-            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
+            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)) // Elusive
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Frost
-        };
+        ];
 
         ComponentLocator = new GameComponentLocator(this);
         BoardDate = new GameBoardData();
-        ActiveDeck = new ActiveDeckApiResponse() { DeckCode = null, CardsInDeck = new Dictionary<string, int>() };
+        ActiveDeck = new ActiveDeckApiResponse()
+        {
+            DeckCode = null,
+            CardsInDeck = new Dictionary<string, int>()
+        };
         //User32.SetProcessDPIAware();
     }
 
@@ -116,19 +129,21 @@ public sealed class StateMachine : IDisposable
     {
         IntPtr targetHandler = IntPtr.Zero;
         User32.EnumWindows((handle, _) =>
-        {
-            int windowTextLength = User32.GetWindowTextLength(handle) + 1;
-            Span<char> windowName = stackalloc char[windowTextLength];
+            {
+                int windowTextLength = User32.GetWindowTextLength(handle) + 1;
+                Span<char> windowName = stackalloc char[windowTextLength];
 
-            User32.GetWindowText(handle, windowName);
-            windowName = windowName[0..windowName.IndexOf('\0')];
+                User32.GetWindowText(handle, windowName);
+                windowName = windowName[0..windowName.IndexOf('\0')];
 
-            if (!MemoryExtensions.Equals(windowName, "Legends of Runeterra", StringComparison.Ordinal))
-                return true;
+                if (!MemoryExtensions.Equals(windowName, "Legends of Runeterra", StringComparison.Ordinal))
+                    return true;
 
-            targetHandler = handle;
-            return false;
-        }, IntPtr.Zero);
+                targetHandler = handle;
+                return false;
+            },
+            IntPtr.Zero
+        );
 
         return targetHandler;
     }
@@ -384,6 +399,9 @@ public sealed class StateMachine : IDisposable
         if (exception is not null || cardPositions is null)
             return;
 
+        if (cardPositions.GameState == "Menus")
+            return;
+
         foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
         {
             EInGameCardPosition cardPosition = GetCardPosition(rectCard);
@@ -590,7 +608,10 @@ public sealed class StateMachine : IDisposable
     /// <returns>A tuple containing the current Nexus health values for the player and the opponent.</returns>
     private (int NexusHealth, int OpponentNexusHealth) GetNexusHealth(Image<Bgr, byte>[] frames)
     {
-        var color = new[] { (new Hsv(0, 0, 230), new Hsv(180, 70, 255)) }; // White
+        var color = new[]
+        {
+            (new Hsv(0, 0, 230), new Hsv(180, 70, 255))
+        }; // White
         Image<Bgr, byte> image = frames[0];
         (Rectangle player, Rectangle opponent) = ComponentLocator.GetNexusHealthRect();
 
@@ -632,13 +653,16 @@ public sealed class StateMachine : IDisposable
         _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         _gameData = await GetGameDataAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
         await UpdateActiveDeckAsync(ct).ConfigureAwait(false);
-        await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // must to be called before 'GetGameState'
+        await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // Must to be called before 'GetGameState'
 
         // Game
         GameState = GetGameState(frames);
-        BoardDate.Mana = GetMana(frames);
-        BoardDate.SpellMana = GetSpellMana(frames);
-        (BoardDate.NexusHealth, BoardDate.OpponentNexusHealth) = GetNexusHealth(frames);
+        if (GameState is not EGameState.Menus and not EGameState.MenusDeckSelected)
+        {
+            BoardDate.Mana = GetMana(frames);
+            BoardDate.SpellMana = GetSpellMana(frames);
+            (BoardDate.NexusHealth, BoardDate.OpponentNexusHealth) = GetNexusHealth(frames);
+        }
 
         // Clean
         foreach (Image<Bgr, byte> frame in frames)

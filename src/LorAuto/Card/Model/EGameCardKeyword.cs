@@ -223,5 +223,20 @@ public enum EGameCardKeyword
     /// <summary>
     /// The "Brash" keyword.
     /// </summary>
-    Brash
+    Brash,
+
+    /// <summary>
+    /// The "Curse" keyword.
+    /// </summary>
+    Curse,
+
+    /// <summary>
+    /// The "ElementalSkill" keyword.
+    /// </summary>
+    ElementalSkill,
+
+    /// <summary>
+    /// The "Deathless" keyword.
+    /// </summary>
+    Deathless
 }
