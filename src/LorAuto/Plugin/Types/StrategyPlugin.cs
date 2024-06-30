@@ -42,7 +42,12 @@ public abstract class StrategyPlugin : PluginBase
     /// <param name="mana">The available mana.</param>
     /// <param name="spellMana">The available spell mana.</param>
     /// <returns>A tuple containing the played hand card and its target selector (if applicable).</returns>
-    public abstract (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(GameBoardData boardData, EGameState gameState, int mana, int spellMana);
+    public abstract (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(
+        GameBoardData boardData,
+        GameState gameState,
+        int mana,
+        int spellMana
+    );
 
     /// <summary>
     /// Blocks incoming attacks from the opponent's board cards.
@@ -50,7 +55,10 @@ public abstract class StrategyPlugin : PluginBase
     /// <param name="boardData">The current game board data.</param>
     /// <param name="spellsToUse">Output parameter for the list of spell cards to use for blocking.</param>
     /// <returns>A dictionary mapping player's own board cards to the opponent's board cards to block them.</returns>
-    public abstract Dictionary<InGameCard, InGameCard> Block(GameBoardData boardData, out List<CardTargetSelector>? spellsToUse);
+    public abstract Dictionary<InGameCard, InGameCard> Block(
+        GameBoardData boardData,
+        out List<CardTargetSelector>? spellsToUse
+    );
 
     /// <summary>
     /// Responds to an opponent's action during the game.
@@ -60,7 +68,12 @@ public abstract class StrategyPlugin : PluginBase
     /// <param name="mana">The available mana.</param>
     /// <param name="spellMana">The available spell mana.</param>
     /// <returns>The action to perform in response to the opponent's action.</returns>
-    public abstract EGamePlayAction RespondToOpponentAction(GameBoardData boardData, EGameState gameState, int mana, int spellMana);
+    public abstract EGamePlayAction RespondToOpponentAction(
+        GameBoardData boardData,
+        GameState gameState,
+        int mana,
+        int spellMana
+    );
 
     /// <summary>
     /// Determines the action to take for using attack tokens.

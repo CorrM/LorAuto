@@ -24,9 +24,9 @@ internal sealed class DotnetPluginHolder : PluginHolder
         // Load plugin
         Assembly pluginAssembly;
         using (var pluginStream = new FileStream(PluginPath, FileMode.Open))
+        {
             pluginAssembly = _loader.LoadFromStream(pluginStream);
-
-        string dllFileName = Path.GetFileName(PluginPath);
+        }
 
         // Get type of plugin
         Type cgPluginType = typeof(PluginBase);
@@ -36,6 +36,7 @@ internal sealed class DotnetPluginHolder : PluginHolder
             .Where(p => cgPluginType.IsAssignableFrom(p) && p.IsClass && !p.IsAbstract)
             .ToArray();
 
+        string dllFileName = Path.GetFileName(PluginPath);
         switch (pluginTypes.Length)
         {
             case 0:
@@ -61,7 +62,11 @@ internal sealed class DotnetPluginHolder : PluginHolder
         if (PluginType is null)
             throw new UnreachableException("'Load' method must to be called first.");
 
-        return PluginType.Assembly.GetReferencedAssemblies().FirstOrDefault(an => an.Name == GetType().Assembly.GetName().Name)?.Version;
+        return Array.Find(
+                PluginType.Assembly.GetReferencedAssemblies(),
+                an => an.Name == GetType().Assembly.GetName().Name
+            )
+            ?.Version;
     }
 
     protected override PluginBase GetPluginInstance()

@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents the possible states of the game.
 /// </summary>
-public enum EGameState
+public enum GameState
 {
     /// <summary>
     /// No specific state.

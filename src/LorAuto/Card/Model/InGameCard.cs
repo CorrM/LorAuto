@@ -16,12 +16,12 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// <summary>
     /// Gets the ID of the card.
     /// </summary>
-    public int CardID { get; }
+    public int CardId { get; }
 
     /// <summary>
-    /// Gets the in-game position of the card.
+    /// Gets the in-game card holder.
     /// </summary>
-    public EInGameCardPosition InGamePosition { get; private set; }
+    public InGameCardHolder InGameHolder { get; private set; }
 
     /// <summary>
     /// Gets the position of the card on the game board.
@@ -54,16 +54,21 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// <param name="otherCard">The base game card.</param>
     /// <param name="rectCard">The game client rectangle that represents the card's position.</param>
     /// <param name="windowSize">The size of the game window.</param>
-    /// <param name="inGamePosition">The in-game position of the card.</param>
-    internal InGameCard(GameCard otherCard, GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
+    /// <param name="inGameHolder">The in-game card holder.</param>
+    internal InGameCard(
+        GameCard otherCard,
+        GameClientRectangle rectCard,
+        Size windowSize,
+        InGameCardHolder inGameHolder
+    )
     {
         // Using reflection is better than forgetting to copy any property
         PropertyInfo[] propertyInfos = typeof(GameCard).GetProperties(BindingFlags.Instance | BindingFlags.Public);
         foreach (PropertyInfo info in propertyInfos)
             info.SetValue(this, info.GetValue(otherCard));
 
-        CardID = rectCard.CardID;
-        UpdatePosition(rectCard, windowSize, inGamePosition);
+        CardId = rectCard.CardID;
+        UpdatePosition(rectCard, windowSize, inGameHolder);
     }
 
     /// <summary>
@@ -71,15 +76,15 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// </summary>
     /// <param name="rectCard">The game client rectangle that represents the card's position.</param>
     /// <param name="windowSize">The size of the game window.</param>
-    /// <param name="inGamePosition">The in-game position of the card.</param>
-    internal void UpdatePosition(GameClientRectangle rectCard, Size windowSize, EInGameCardPosition inGamePosition)
+    /// <param name="inGameHolder">The in-game card holder.</param>
+    internal void UpdatePosition(GameClientRectangle rectCard, Size windowSize, InGameCardHolder inGameHolder)
     {
-        if (CardID != rectCard.CardID)
+        if (CardId != rectCard.CardID)
             throw new Exception($"Current card and {nameof(rectCard)} not identical.");
 
         int y = windowSize.Height - rectCard.TopLeftY;
 
-        InGamePosition = inGamePosition;
+        InGameHolder = inGameHolder;
         Position = new Point(rectCard.TopLeftX, y);
         Size = new Size(rectCard.Width, rectCard.Height);
         TopCenterPos = new Point(rectCard.TopLeftX + (rectCard.Width / 2), y);
@@ -119,7 +124,7 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
         if (ReferenceEquals(this, other))
             return true;
 
-        return CardID == other.CardID;
+        return CardId == other.CardId;
     }
 
     /// <inheritdoc />
@@ -131,7 +136,7 @@ public sealed class InGameCard : GameCard, IEquatable<InGameCard>
     /// <inheritdoc />
     public override int GetHashCode()
     {
-        return CardID;
+        return CardId;
     }
 
     /// <summary>

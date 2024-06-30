@@ -8,7 +8,6 @@ using LorAuto.Card.Model;
 using LorAuto.Client;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
-using PInvoke;
 
 namespace LorAuto;
 
@@ -17,22 +16,17 @@ namespace LorAuto;
 /// </summary>
 internal sealed class UserSimulator
 {
-    private readonly StateMachine _stateMachine;
+    private readonly GameWindow _gameWindow;
     private readonly InputSimulator _input;
-    private readonly (double, double)[] _selectDeckAi;
-    private readonly (double, double)[] _selectDeckPvp;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="UserSimulator"/> class.
     /// </summary>
-    /// <param name="stateMachine">The state machine used for game state tracking.</param>
-    public UserSimulator(StateMachine stateMachine)
+    /// <param name="gameWindow">The game window.</param>
+    public UserSimulator(GameWindow gameWindow)
     {
-        _stateMachine = stateMachine;
+        _gameWindow = gameWindow;
         _input = new InputSimulator();
-
-        _selectDeckAi = [(0.04721, 0.33454), (0.15738, 0.33401), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538)];
-        _selectDeckPvp = [(0.04721, 0.33454), (0.15738, 0.25), (0, 0), (0.33180, 0.30779), (0.83213, 0.89538)];
     }
 
     /// <summary>
@@ -40,12 +34,11 @@ internal sealed class UserSimulator
     /// </summary>
     private void ForegroundIfGameNot()
     {
-        _stateMachine.UpdateClientInfo();
-
-        if (_stateMachine.GameIsForeground)
+        _gameWindow.UpdateClientInfo();
+        if (_gameWindow.GameIsForeground)
             return;
 
-        User32.SetForegroundWindow(_stateMachine.GameWindowHandle);
+        _gameWindow.SetGameForeground();
     }
 
     /// <summary>
@@ -53,30 +46,35 @@ internal sealed class UserSimulator
     /// </summary>
     /// <param name="gameRotation">The game rotation.</param>
     /// <param name="isPvp">Specifies whether it is PvP mode.</param>
-    public void SelectDeck(EGameRotation gameRotation, bool isPvp)
+    public void SelectGameRotation(GameRotation gameRotation, bool isPvp)
     {
         ForegroundIfGameNot();
 
-        (double, double) gameTypePos = gameRotation switch
-        {
-            EGameRotation.Standard => (0.70989, 0.05),
-            EGameRotation.Eternal => (0.81970, 0.05),
-            _ => throw new UnreachableException()
-        };
+        // I use playMenuItem multiple times so if there is any UI open it's still clicking it
+        (double xRatio, double yRatio) playMenuItem = (0.04721, 0.33454);
 
-        foreach ((double xRatio, double yRatio) in isPvp ? _selectDeckPvp : _selectDeckAi)
+        Span<(double xRatio, double yRatio)> selectGameAiPosRatio =
+            stackalloc (double, double)[] { playMenuItem, playMenuItem, playMenuItem, (0.15738, 0.434) };
+        Span<(double xRatio, double yRatio)> selectGamePvpPosRatio =
+            stackalloc (double, double)[] { playMenuItem, playMenuItem, playMenuItem, (0.15738, 0.358), (0, 0) };
+
+        foreach ((double xRatio, double yRatio) in isPvp ? selectGamePvpPosRatio : selectGameAiPosRatio)
         {
             double xr;
             double yr;
 
             if (xRatio == 0 && yRatio == 0 && isPvp)
             {
-                xr = gameTypePos.Item1;
-                yr = gameTypePos.Item2;
+                (xr, yr) = gameRotation switch
+                {
+                    GameRotation.Standard => (0.70989, 0.05),
+                    GameRotation.Eternal => (0.81970, 0.05),
+                    _ => throw new UnreachableException(),
+                };
             }
             else if (xRatio == 0 && yRatio == 0)
             {
-                // vs AI there is not Standard or Eternal
+                // vs AI there is no game rotation
                 continue;
             }
             else
@@ -85,18 +83,34 @@ internal sealed class UserSimulator
                 yr = yRatio;
             }
 
-            (double x, double y) = (_stateMachine.WindowLocation.X + (xr * _stateMachine.WindowSize.Width), _stateMachine.WindowLocation.Y + (yr * _stateMachine.WindowSize.Height));
-            _input.Mouse.MoveMouseSmooth(x, y)
-                .LeftButtonClick()
-                .Sleep(Random.Shared.Next(700, 1000));
+            (double x, double y) = (_gameWindow.WindowLocation.X + (xr * _gameWindow.WindowSize.Width),
+                _gameWindow.WindowLocation.Y + (yr * _gameWindow.WindowSize.Height));
+            _input.Mouse.MoveMouseSmooth(x, y).LeftButtonClick().Sleep(Random.Shared.Next(700, 1000));
+        }
+    }
+
+    /// <summary>
+    /// Simulates the selection of a deck based on the game rotation and PvP mode.
+    /// </summary>
+    /// <param name="deckIndex">The index of the deck to select.</param>
+    public void SelectDeck(int deckIndex)
+    {
+        ForegroundIfGameNot();
+
+        // TODO: Use deckIndex to select deck
+        Span<(double xRatio, double yRatio)> selectDeckPosRatio = [(0.33180, 0.30779), (0.83213, 0.89538)];
+        foreach ((double xRatio, double yRatio) in selectDeckPosRatio)
+        {
+            (double x, double y) = (_gameWindow.WindowLocation.X + (xRatio * _gameWindow.WindowSize.Width),
+                _gameWindow.WindowLocation.Y + (yRatio * _gameWindow.WindowSize.Height));
+            _input.Mouse.MoveMouseSmooth(x, y).LeftButtonClick().Sleep(Random.Shared.Next(700, 1000));
         }
 
-        Thread.Sleep(1000);
-
         // Handle "Matchmaking has failed" error
-        (double, double) okButtonPos = (_stateMachine.WindowLocation.X + 0.5 * _stateMachine.WindowSize.Width, _stateMachine.WindowLocation.Y + 0.546 * _stateMachine.WindowSize.Height);
-        _input.Mouse.MoveMouseSmooth((int)okButtonPos.Item1, (int)okButtonPos.Item2)
-            .LeftButtonClick();
+        Thread.Sleep(5000);
+        (double, double) okButtonPos = (_gameWindow.WindowLocation.X + (0.5 * _gameWindow.WindowSize.Width),
+            _gameWindow.WindowLocation.Y + (0.546 * _gameWindow.WindowSize.Height));
+        _input.Mouse.MoveMouseSmooth((int)okButtonPos.Item1, (int)okButtonPos.Item2).LeftButtonClick();
     }
 
     /// <summary>
@@ -107,11 +121,10 @@ internal sealed class UserSimulator
     {
         ForegroundIfGameNot();
 
-        int cx = _stateMachine.WindowLocation.X + card.TopCenterPos.X;
-        int cy = _stateMachine.WindowLocation.Y + card.TopCenterPos.Y;
+        int cx = _gameWindow.WindowLocation.X + card.TopCenterPos.X;
+        int cy = _gameWindow.WindowLocation.Y + card.TopCenterPos.Y;
 
-        _input.Mouse.MoveMouseSmooth(cx, cy)
-            .LeftButtonClick();
+        _input.Mouse.MoveMouseSmooth(cx, cy).LeftButtonClick();
     }
 
     /// <summary>
@@ -122,14 +135,13 @@ internal sealed class UserSimulator
     {
         ForegroundIfGameNot();
 
-        (Point player, Point opponent) = _stateMachine.ComponentLocator.GetNexusPossition();
+        (Point player, Point opponent) = _gameWindow.ComponentLocator.GetNexusPosition();
         Point target = opponentNexus ? opponent : player;
 
-        int cx = _stateMachine.WindowLocation.X + target.X;
-        int cy = _stateMachine.WindowLocation.Y + target.Y;
+        int cx = _gameWindow.WindowLocation.X + target.X;
+        int cy = _gameWindow.WindowLocation.Y + target.Y;
 
-        _input.Mouse.MoveMouseSmooth(cx, cy)
-            .LeftButtonClick();
+        _input.Mouse.MoveMouseSmooth(cx, cy).LeftButtonClick();
     }
 
     /// <summary>
@@ -141,17 +153,13 @@ internal sealed class UserSimulator
     {
         ForegroundIfGameNot();
 
-        int x = _stateMachine.WindowLocation.X + handCard.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + handCard.TopCenterPos.Y;
+        int x = _gameWindow.WindowLocation.X + handCard.TopCenterPos.X;
+        int y = _gameWindow.WindowLocation.Y + handCard.TopCenterPos.Y;
 
-        _input.Mouse.MoveMouseSmooth(x, y)
-            .Sleep(40)
-            .LeftButtonDown();
+        _input.Mouse.MoveMouseSmooth(x, y).Sleep(40).LeftButtonDown();
 
-        int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
-        _input.Mouse.MoveMouseSmooth(x, newY)
-            .Sleep(40)
-            .LeftButtonUp();
+        int newY = y - 3 * _gameWindow.WindowSize.Height / 7;
+        _input.Mouse.MoveMouseSmooth(x, newY).Sleep(40).LeftButtonUp();
 
         Thread.Sleep(500); // Wait for the card maximize animation
 
@@ -165,7 +173,9 @@ internal sealed class UserSimulator
                     case ECardTarget.Card:
                     case ECardTarget.HandCard:
                         if (effectTarget is null)
-                            throw new InvalidOperationException("Selector that targeting a card should have an 'effectTarget'.");
+                            throw new InvalidOperationException(
+                                "Selector that targeting a card should have an 'effectTarget'."
+                            );
 
                         ClickCard(effectTarget);
                         break;
@@ -200,17 +210,13 @@ internal sealed class UserSimulator
     {
         ForegroundIfGameNot();
 
-        int x = _stateMachine.WindowLocation.X + boardCard.TopCenterPos.X;
-        int y = _stateMachine.WindowLocation.Y + boardCard.TopCenterPos.Y;
+        int x = _gameWindow.WindowLocation.X + boardCard.TopCenterPos.X;
+        int y = _gameWindow.WindowLocation.Y + boardCard.TopCenterPos.Y;
 
-        _input.Mouse.MoveMouseSmooth(x, y)
-            .Sleep(40)
-            .LeftButtonDown();
+        _input.Mouse.MoveMouseSmooth(x, y).Sleep(40).LeftButtonDown();
 
-        int newY = y - 3 * _stateMachine.WindowSize.Height / 7;
-        _input.Mouse.MoveMouseSmooth(x, newY)
-            .Sleep(40)
-            .LeftButtonUp();
+        int newY = y - 3 * _gameWindow.WindowSize.Height / 7;
+        _input.Mouse.MoveMouseSmooth(x, newY).Sleep(40).LeftButtonUp();
     }
 
     /// <summary>
@@ -220,8 +226,10 @@ internal sealed class UserSimulator
     /// <param name="opponentBlocked">The opponent's card to block with.</param>
     public void BlockCard(InGameCard card, InGameCard opponentBlocked)
     {
-        (int, int) posSrc = (_stateMachine.WindowLocation.X + card.TopCenterPos.X, _stateMachine.WindowLocation.Y + card.TopCenterPos.Y);
-        (int, int) posDest = (_stateMachine.WindowLocation.X + opponentBlocked.TopCenterPos.X, _stateMachine.WindowLocation.Y + opponentBlocked.TopCenterPos.Y);
+        (int, int) posSrc = (_gameWindow.WindowLocation.X + card.TopCenterPos.X,
+            _gameWindow.WindowLocation.Y + card.TopCenterPos.Y);
+        (int, int) posDest = (_gameWindow.WindowLocation.X + opponentBlocked.TopCenterPos.X,
+            _gameWindow.WindowLocation.Y + opponentBlocked.TopCenterPos.Y);
 
         ForegroundIfGameNot();
 
@@ -246,24 +254,25 @@ internal sealed class UserSimulator
     /// <summary>
     /// Simulates continuing and replaying the game after it ends.
     /// </summary>
-    public void GameEndContinueAndReplay()
+    public void GameEndContinueAndReplay(StateMachine stateMachine)
     {
-        double continueBtnPosX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.66);
-        double continueBtnPosY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.90);
+        ForegroundIfGameNot();
+
+        double continueBtnPosX = _gameWindow.WindowLocation.X + (_gameWindow.WindowSize.Width * 0.700);
+        double continueBtnPosY = _gameWindow.WindowLocation.Y + (_gameWindow.WindowSize.Height * 0.915);
 
         for (int i = 0; i < 16; i++)
         {
-            ForegroundIfGameNot();
-
-            _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY)
-                .LeftButtonClick();
+            _input.Mouse.MoveMouseSmooth(continueBtnPosX, continueBtnPosY).LeftButtonClick();
 
             Thread.Sleep(1000);
 
-            // Don't move this code form here, as the current game state will just be 'EGameState.Menus'
-            _stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
-            if (_stateMachine.GameState is EGameState.MenusDeckSelected)
+            // Update game status. otherwise game status will be 'Menus'.
+            stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
+            if (stateMachine.GameState is GameState.MenusDeckSelected)
+            {
                 break;
+            }
         }
     }
 
@@ -272,8 +281,8 @@ internal sealed class UserSimulator
     /// </summary>
     public void ResetMousePosition()
     {
-        double mouseX = _stateMachine.WindowLocation.X + (_stateMachine.WindowSize.Width * 0.1041);
-        double mouseY = _stateMachine.WindowLocation.Y + (_stateMachine.WindowSize.Height * 0.7592);
+        double mouseX = _gameWindow.WindowLocation.X + (_gameWindow.WindowSize.Width * 0.1041);
+        double mouseY = _gameWindow.WindowLocation.Y + (_gameWindow.WindowSize.Height * 0.7592);
 
         _input.Mouse.MoveMouseSmooth(mouseX, mouseY);
     }

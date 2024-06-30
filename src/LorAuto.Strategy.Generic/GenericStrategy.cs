@@ -17,7 +17,7 @@ public sealed class GenericStrategy : StrategyPlugin
             Name = "Generic",
             PluginKind = EPluginKind.Strategy,
             Description = "Provides a versatile and customizable gameplay strategyB.",
-            SourceCodeLink = "https://github.com/CorrM/LorAuto"
+            SourceCodeLink = "https://github.com/CorrM/LorAuto",
         };
     }
 
@@ -26,7 +26,12 @@ public sealed class GenericStrategy : StrategyPlugin
         return mulliganCards.Where(c => c.Cost > 3).ToList();
     }
 
-    public override (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(GameBoardData boardData, EGameState gameState, int mana, int spellMana)
+    public override (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(
+        GameBoardData boardData,
+        GameState gameState,
+        int mana,
+        int spellMana
+    )
     {
         InGameCard? cardToPlay = GetPlayableHandCards(boardData.Cards, mana, spellMana)
             .Where(c => c.Type != EGameCardType.Spell)
@@ -39,7 +44,10 @@ public sealed class GenericStrategy : StrategyPlugin
         return (cardToPlay, null);
     }
 
-    public override Dictionary<InGameCard, InGameCard> Block(GameBoardData boardData, out List<CardTargetSelector>? spellsToUse)
+    public override Dictionary<InGameCard, InGameCard> Block(
+        GameBoardData boardData,
+        out List<CardTargetSelector>? spellsToUse
+    )
     {
         spellsToUse = null;
 
@@ -69,7 +77,8 @@ public sealed class GenericStrategy : StrategyPlugin
                     continue;
                 }
 
-                if (opponent.Keywords.Contains(EGameCardKeyword.Elusive) && !myCard.Keywords.Contains(EGameCardKeyword.Elusive))
+                if (opponent.Keywords.Contains(EGameCardKeyword.Elusive) &&
+                    !myCard.Keywords.Contains(EGameCardKeyword.Elusive))
                     continue;
 
                 if (opponent.Keywords.Contains(EGameCardKeyword.Fearsome) && myCard.Attack < 3)
@@ -87,7 +96,12 @@ public sealed class GenericStrategy : StrategyPlugin
         return ret;
     }
 
-    public override EGamePlayAction RespondToOpponentAction(GameBoardData boardData, EGameState gameState, int mana, int spellMana)
+    public override EGamePlayAction RespondToOpponentAction(
+        GameBoardData boardData,
+        GameState gameState,
+        int mana,
+        int spellMana
+    )
     {
         return EGamePlayAction.PlayCards;
     }
@@ -95,15 +109,12 @@ public sealed class GenericStrategy : StrategyPlugin
     public override EGamePlayAction AttackTokenUsage(GameBoardData boardData, int mana, int spellMana)
     {
         // Open attack if opponent have no card to block
-        return boardData.Cards.OpponentCardsBoard.Count == 0
-            ? EGamePlayAction.Attack
-            : EGamePlayAction.PlayCards;
+        return boardData.Cards.OpponentCardsBoard.Count == 0 ? EGamePlayAction.Attack : EGamePlayAction.PlayCards;
     }
 
     public override List<InGameCard> Attack(GameBoardData boardData, List<InGameCard> playerBoardCards)
     {
-        return playerBoardCards
-            .OrderBy(c => c.Description.Contains("Support:"))
+        return playerBoardCards.OrderBy(c => c.Description.Contains("Support:"))
             .ThenByDescending(c => c.Attack)
             .ToList();
     }

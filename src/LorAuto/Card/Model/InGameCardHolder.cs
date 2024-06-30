@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents the possible positions of an in-game card.
 /// </summary>
-public enum EInGameCardPosition
+public enum InGameCardHolder
 {
     /// <summary>
     /// No specific position.

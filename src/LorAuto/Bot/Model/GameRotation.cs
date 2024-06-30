@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents the rotation of a game.
 /// </summary>
-public enum EGameRotation
+public enum GameRotation
 {
     /// <summary>
     /// Standard rotation.

@@ -7,16 +7,21 @@ using LorAuto.Card.Model;
 using LorAuto.Client.Model;
 using LorAuto.Extensions;
 using LorAuto.OCR;
+using Microsoft.Extensions.Logging;
 using PInvoke;
 using Constants = LorAuto.Client.Model.Constants;
 
 namespace LorAuto.Client;
 
+// TODO: Move this class from this namespace
+
 /// <summary>
 /// Determines the game state and cards on board by using the LoR API and cv2 functionality
 /// </summary>
-public sealed class StateMachine : IDisposable
+internal sealed class StateMachine : IDisposable
 {
+    private readonly ILogger? _logger;
+    private readonly GameWindow _gameWindow;
     private readonly CardSetsManager _cardSetsManager;
     private readonly OcrHelper _ocrHelper;
     private readonly GameClientApi _gameClientApi;
@@ -24,36 +29,11 @@ public sealed class StateMachine : IDisposable
     private readonly int[] _numPxMask;
 
     private int _nGames;
-    private int _prevGameID = -1;
+    private int _prevGameId;
 
     private GameResultApiResponse? _gameResult;
     private CardPositionsApiResponse? _gameData;
     private readonly (Hsv Lower, Hsv Higher)[] _recognizeColors;
-
-    /// <summary>
-    /// Gets the handle of the game window.
-    /// </summary>
-    public IntPtr GameWindowHandle { get; private set; }
-
-    /// <summary>
-    /// Gets the location of the game window.
-    /// </summary>
-    public Point WindowLocation { get; private set; }
-
-    /// <summary>
-    /// Gets the size of the game window.
-    /// </summary>
-    public Size WindowSize { get; private set; }
-
-    /// <summary>
-    /// Gets a value indicating whether the game is in the foreground.
-    /// </summary>
-    public bool GameIsForeground { get; private set; }
-
-    /// <summary>
-    /// Gets the component locator used for locating various game components.
-    /// </summary>
-    public GameComponentLocator ComponentLocator { get; }
 
     /// <summary>
     /// Gets the number of games won continuously.
@@ -63,7 +43,7 @@ public sealed class StateMachine : IDisposable
     /// <summary>
     /// Gets the current game state.
     /// </summary>
-    public EGameState GameState { get; private set; }
+    public GameState GameState { get; private set; }
 
     /// <summary>
     /// Gets the game board data.
@@ -78,15 +58,19 @@ public sealed class StateMachine : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="StateMachine"/> class with the specified card sets manager and game client port.
     /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="gameWindow">The game window.</param>
     /// <param name="cardSetsManager">The card sets manager.</param>
     /// <param name="gameClientPort">The port number of the game client.</param>
-    public StateMachine(CardSetsManager cardSetsManager, int gameClientPort)
+    public StateMachine(ILogger? logger, GameWindow gameWindow, CardSetsManager cardSetsManager, int gameClientPort)
     {
+        _logger = logger;
+        _gameWindow = gameWindow;
         _cardSetsManager = cardSetsManager;
-        _ocrHelper = new OcrHelper(@"./TessData", "eng");
+        _ocrHelper = new OcrHelper("./TessData", "eng");
         _gameClientApi = new GameClientApi(gameClientPort);
-        _manaMasks = new byte[][][]
-        {
+        _manaMasks =
+        [
             Constants.Zero,
             Constants.One,
             Constants.Two,
@@ -97,114 +81,27 @@ public sealed class StateMachine : IDisposable
             Constants.Seven,
             Constants.Eight,
             Constants.Nine,
-            Constants.Ten
-        };
+            Constants.Ten,
+        ];
         _numPxMask = _manaMasks.Select(mask => mask.SelectMany(line => line).Sum(b => b)).ToArray();
+        _prevGameId = -1;
         _recognizeColors =
         [
             (new Hsv(0, 0, 230), new Hsv(0, 0, 255)), // White
             (new Hsv(0, 0, 230), new Hsv(180, 70, 255)), // White
             (new Hsv(30, 80, 80), new Hsv(180, 255, 255)), // Green
             (new Hsv(0, 250, 200), new Hsv(0, 255, 255)), // Light red
-            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)) // Elusive
+            (new Hsv(0, 0, 255), new Hsv(180, 128, 255)), // Elusive
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Tough
             // (new Hsv(0, 0, 0), new Hsv(0, 0, 0)), // TODO: Frost
         ];
 
-        ComponentLocator = new GameComponentLocator(this);
         BoardDate = new GameBoardData();
         ActiveDeck = new ActiveDeckApiResponse()
         {
             DeckCode = null,
-            CardsInDeck = new Dictionary<string, int>()
+            CardsInDeck = new Dictionary<string, int>(),
         };
-        //User32.SetProcessDPIAware();
-    }
-
-    /// <summary>
-    /// Gets the handle of the game window.
-    /// </summary>
-    /// <returns>The handle of the game window.</returns>
-    private IntPtr GetWindowHandle()
-    {
-        IntPtr targetHandler = IntPtr.Zero;
-        User32.EnumWindows((handle, _) =>
-            {
-                int windowTextLength = User32.GetWindowTextLength(handle) + 1;
-                Span<char> windowName = stackalloc char[windowTextLength];
-
-                User32.GetWindowText(handle, windowName);
-                windowName = windowName[0..windowName.IndexOf('\0')];
-
-                if (!MemoryExtensions.Equals(windowName, "Legends of Runeterra", StringComparison.Ordinal))
-                    return true;
-
-                targetHandler = handle;
-                return false;
-            },
-            IntPtr.Zero
-        );
-
-        return targetHandler;
-    }
-
-    /// <summary>
-    /// Gets the location and size of the game window.
-    /// </summary>
-    /// <returns>A tuple containing the window location and size.</returns>
-    private (Point, Size) GetWindowRectInfo()
-    {
-        if (GameWindowHandle == IntPtr.Zero)
-            return (new Point(), new Size());
-
-        if (!User32.GetWindowRect(GameWindowHandle, out RECT targetRect))
-            return (new Point(), new Size());
-
-        var loc = new Point(targetRect.left, targetRect.top);
-        var size = new Size(targetRect.right - targetRect.left, targetRect.bottom - targetRect.top);
-
-        return (loc, size);
-    }
-
-    /// <summary>
-    /// Checks if the game is in the foreground.
-    /// </summary>
-    /// <returns><c>true</c> if the game is in the foreground; otherwise, <c>false</c>.</returns>
-    private bool GetGameIsForeground()
-    {
-        IntPtr hWindow = User32.GetForegroundWindow();
-        return hWindow == GameWindowHandle;
-    }
-
-    /// <summary>
-    /// Gets the frames of the game window.
-    /// </summary>
-    /// <returns>An array of BGR images representing the frames.</returns>
-    private Image<Bgr, byte>[] GetFrames()
-    {
-        const int framesCount = 4;
-        (Point loc, Size size) = GetWindowRectInfo();
-        var frames = new Image<Bgr, byte>[framesCount];
-
-        using User32.SafeDCHandle hdcScreen = User32.GetDC(IntPtr.Zero);
-        using User32.SafeDCHandle hdc = Gdi32.CreateCompatibleDC(hdcScreen);
-
-        IntPtr hBitmap = Gdi32.CreateCompatibleBitmap(hdcScreen, size.Width, size.Height);
-        Gdi32.SelectObject(hdc, hBitmap);
-
-        for (int i = 0; i < framesCount; i++)
-        {
-            Gdi32.BitBlt(hdc, 0, 0, size.Width, size.Height, hdcScreen, loc.X, loc.Y, 0xCC0020);
-
-            using Bitmap bitmap = Image.FromHbitmap(hBitmap);
-            frames[i] = bitmap.ToImage<Bgr, byte>();
-
-            Thread.Sleep(8);
-        }
-
-        Gdi32.DeleteObject(hBitmap);
-
-        return frames;
     }
 
     /// <summary>
@@ -214,8 +111,9 @@ public sealed class StateMachine : IDisposable
     /// <returns><c>true</c> if the player can react; otherwise, <c>false</c>.</returns>
     private bool PlayerCanInteract(Image<Bgr, byte> frame)
     {
-        using Image<Bgr, byte> turnBtnSubImg = frame.Crop(ComponentLocator.GetTurnButtonRect());
-        int mulliganNumBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
+        using Image<Bgr, byte> turnBtnSubImg = frame.Crop(_gameWindow.ComponentLocator.GetTurnButtonRect());
+        int mulliganNumBluePx =
+            turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
 
         return mulliganNumBluePx > 100; // End turn button is not GRAY
     }
@@ -227,7 +125,8 @@ public sealed class StateMachine : IDisposable
     /// <returns>The game result response.</returns>
     private async Task<GameResultApiResponse?> GetGameResultAsync(CancellationToken ct = default)
     {
-        (GameResultApiResponse? response, Exception? exception) = await _gameClientApi.GetGameResultAsync(ct).ConfigureAwait(false);
+        (GameResultApiResponse? response, Exception? exception) =
+            await _gameClientApi.GetGameResultAsync(ct).ConfigureAwait(false);
         if (exception is not null || response is null)
             return null;
 
@@ -241,7 +140,8 @@ public sealed class StateMachine : IDisposable
     /// <returns>The card positions response.</returns>
     private async Task<CardPositionsApiResponse?> GetGameDataAsync(CancellationToken ct = default)
     {
-        (CardPositionsApiResponse? response, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
+        (CardPositionsApiResponse? response, Exception? exception) =
+            await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
         if (exception is not null || response is null)
             return null;
 
@@ -256,7 +156,8 @@ public sealed class StateMachine : IDisposable
     {
         ActiveDeck.CardsInDeck.Clear();
 
-        (ActiveDeckApiResponse? newActiveDeck, Exception? exception) = await _gameClientApi.GetActiveDeckAsync(ct).ConfigureAwait(false);
+        (ActiveDeckApiResponse? newActiveDeck, Exception? exception) =
+            await _gameClientApi.GetActiveDeckAsync(ct).ConfigureAwait(false);
         if (exception is not null || newActiveDeck is null)
         {
             ActiveDeck.DeckCode = null;
@@ -274,26 +175,30 @@ public sealed class StateMachine : IDisposable
     /// </summary>
     /// <param name="rectCard">The game client rectangle representing the card.</param>
     /// <returns>The in-game card position.</returns>
-    private EInGameCardPosition GetCardPosition(GameClientRectangle rectCard)
+    private InGameCardHolder GetCardHolder(GameClientRectangle rectCard)
     {
-        var cardPosition = EInGameCardPosition.None;
-        int y = WindowSize.Height - rectCard.TopLeftY;
-        float yRatio = y / (float)WindowSize.Height;
+        var cardPosition = InGameCardHolder.None;
+        int y = _gameWindow.WindowSize.Height - rectCard.TopLeftY;
+        float yRatio = y / (float)_gameWindow.WindowSize.Height;
 
-        if (yRatio > 0.275f && Math.Abs(rectCard.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
-            cardPosition = EInGameCardPosition.Mulligan;
+        if (yRatio > 0.275f &&
+            Math.Abs(rectCard.TopLeftY - (_gameWindow.WindowSize.Height * 0.6759)) <
+            0.05) // cardHeightRatio((float)rectCard.Height / WindowSize.Height) > .3f
+        {
+            cardPosition = InGameCardHolder.Mulligan;
+        }
 
-        if (cardPosition == EInGameCardPosition.None)
+        if (cardPosition == InGameCardHolder.None)
         {
             cardPosition = yRatio switch
             {
-                > 0.92f => EInGameCardPosition.Hand,
-                > 0.75f => EInGameCardPosition.Board,
-                > 0.58f => EInGameCardPosition.AttackOrBlock,
-                > 0.44f => EInGameCardPosition.SpellStack,
-                > 0.265f => EInGameCardPosition.OpponentAttackOrBlock,
-                > 0.09f => EInGameCardPosition.OpponentBoard,
-                _ => EInGameCardPosition.OpponentHand
+                > 0.92f => InGameCardHolder.Hand,
+                > 0.75f => InGameCardHolder.Board,
+                > 0.58f => InGameCardHolder.AttackOrBlock,
+                > 0.44f => InGameCardHolder.SpellStack,
+                > 0.265f => InGameCardHolder.OpponentAttackOrBlock,
+                > 0.09f => InGameCardHolder.OpponentBoard,
+                _ => InGameCardHolder.OpponentHand,
             };
         }
 
@@ -304,45 +209,45 @@ public sealed class StateMachine : IDisposable
     /// Stores the given card in the appropriate card collection based on its position.
     /// </summary>
     /// <param name="card">The in-game card to store.</param>
-    /// <param name="cardPosition">The in-game card position.</param>
-    private void StoreCard(InGameCard card, EInGameCardPosition cardPosition)
+    /// <param name="cardHolder">The in-game card holder.</param>
+    private void StoreCard(InGameCard card, InGameCardHolder cardHolder)
     {
         // Store cards
-        switch (cardPosition)
+        switch (cardHolder)
         {
-            case EInGameCardPosition.Mulligan:
+            case InGameCardHolder.Mulligan:
                 BoardDate.Cards.CardsMulligan.Add(card);
                 break;
 
-            case EInGameCardPosition.Hand:
+            case InGameCardHolder.Hand:
                 BoardDate.Cards.CardsHand.Add(card);
                 break;
 
-            case EInGameCardPosition.Board:
+            case InGameCardHolder.Board:
                 BoardDate.Cards.CardsBoard.Add(card);
                 break;
 
-            case EInGameCardPosition.AttackOrBlock:
+            case InGameCardHolder.AttackOrBlock:
                 BoardDate.Cards.CardsAttackOrBlock.Add(card);
                 break;
 
-            case EInGameCardPosition.SpellStack:
+            case InGameCardHolder.SpellStack:
                 BoardDate.Cards.SpellStack.Add(card);
                 break;
 
-            case EInGameCardPosition.OpponentAttackOrBlock:
+            case InGameCardHolder.OpponentAttackOrBlock:
                 BoardDate.Cards.OpponentCardsAttackOrBlock.Add(card);
                 break;
 
-            case EInGameCardPosition.OpponentBoard:
+            case InGameCardHolder.OpponentBoard:
                 BoardDate.Cards.OpponentCardsBoard.Add(card);
                 break;
 
-            case EInGameCardPosition.OpponentHand:
+            case InGameCardHolder.OpponentHand:
                 BoardDate.Cards.OpponentCardsHand.Add(card);
                 break;
 
-            case EInGameCardPosition.None:
+            case InGameCardHolder.None:
             default:
                 throw new UnreachableException();
         }
@@ -358,7 +263,7 @@ public sealed class StateMachine : IDisposable
     private void UpdateBoardCardAttackHealth(InGameCard card, Image<Bgr, byte>[] frames)
     {
         Image<Bgr, byte> image = frames[0];
-        (Rectangle attackRect, Rectangle healthRect) = ComponentLocator.GetCardAttackAndHealthRect(card);
+        (Rectangle attackRect, Rectangle healthRect) = _gameWindow.ComponentLocator.GetCardAttackAndHealthRect(card);
 
         // Attack
         using Image<Bgr, byte> attackCropImg = image.Crop(attackRect);
@@ -395,50 +300,64 @@ public sealed class StateMachine : IDisposable
         BoardDate.Cards.Clear();
 
         // !Keep in mind game client api not reveal card current status, like if card is damaged or get new keyword etc.
-        (CardPositionsApiResponse? cardPositions, Exception? exception) = await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
+        (CardPositionsApiResponse? cardPositions, Exception? exception) =
+            await _gameClientApi.GetCardPositionsAsync(ct).ConfigureAwait(false);
         if (exception is not null || cardPositions is null)
             return;
 
         if (cardPositions.GameState == "Menus")
             return;
 
-        foreach (GameClientRectangle rectCard in cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
+        foreach (GameClientRectangle rectCard in
+                 cardPositions.Rectangles.Where(rectCard => rectCard.CardCode != "face"))
         {
-            EInGameCardPosition cardPosition = GetCardPosition(rectCard);
+            InGameCardHolder cardHolder = GetCardHolder(rectCard);
 
             // Get card
-            InGameCard? inGameCard = previousCards.FirstOrDefault(c => c.CardID == rectCard.CardID);
+            InGameCard? inGameCard = previousCards.Find(c => c.CardId == rectCard.CardID);
             if (inGameCard is not null)
             {
-                inGameCard.UpdatePosition(rectCard, WindowSize, cardPosition);
+                inGameCard.UpdatePosition(rectCard, _gameWindow.WindowSize, cardHolder);
             }
             else
             {
-                GameCardSet? gameCardSet = _cardSetsManager.CardSets.FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode)).Value;
+                GameCardSet? gameCardSet = _cardSetsManager.CardSets
+                    .FirstOrDefault(cs => cs.Value.Cards.ContainsKey(rectCard.CardCode))
+                    .Value;
                 if (gameCardSet is null)
                 {
                     _cardSetsManager.DeleteCardSets();
-                    throw new Exception($"Card set that contains card with key({rectCard.CardCode}) not found. (Delete card sets folder may solve the problem)");
+                    throw new Exception(
+                        $"Card set that contains card with key({rectCard.CardCode}) not found. (Delete card sets folder may solve the problem)"
+                    );
                 }
 
-                inGameCard = new InGameCard(gameCardSet.Cards[rectCard.CardCode], rectCard, WindowSize, cardPosition);
+                inGameCard = new InGameCard(
+                    gameCardSet.Cards[rectCard.CardCode],
+                    rectCard,
+                    _gameWindow.WindowSize,
+                    cardHolder
+                );
             }
 
-            StoreCard(inGameCard, cardPosition);
+            StoreCard(inGameCard, cardHolder);
 
-            switch (cardPosition)
+            switch (cardHolder)
             {
-                case EInGameCardPosition.Board or EInGameCardPosition.AttackOrBlock or EInGameCardPosition.OpponentBoard or EInGameCardPosition.OpponentAttackOrBlock:
+                case InGameCardHolder.Board
+                    or InGameCardHolder.AttackOrBlock
+                    or InGameCardHolder.OpponentBoard
+                    or InGameCardHolder.OpponentAttackOrBlock:
                     UpdateBoardCardAttackHealth(inGameCard, frames);
                     break;
 
-                case EInGameCardPosition.Hand: // Update hand card cost
+                case InGameCardHolder.Hand: // Update hand card cost
                     // TODO: Update hand card cost
                     break;
             }
         }
 
-        // Some times opponent attacking cards are right to left
+        // Sometimes opponent attacking cards are right to left
         BoardDate.Cards.Sort();
     }
 
@@ -447,75 +366,105 @@ public sealed class StateMachine : IDisposable
     /// </summary>
     /// <param name="frames">The frames of the game window.</param>
     /// <returns>The current game state.</returns>
-    private EGameState GetGameState(Image<Bgr, byte>[] frames)
+    private GameState GetGameState(Image<Bgr, byte>[] frames)
     {
         if (_gameResult is null || _gameData is null)
+        {
             throw new UnreachableException();
+        }
 
         if ((User32.GetAsyncKeyState((int)User32.VirtualKey.VK_LCONTROL) & 0x8000) != 0)
-            return EGameState.Hold;
+        {
+            return GameState.Hold;
+        }
 
         // # Menus
         Image<Bgr, byte> lastFrame = frames[0];
         if (_gameData.GameState == "Menus")
         {
             // # Menus deck selected
-            Rectangle menusEditDeckButtonRect = ComponentLocator.GetMenusEditDeckButtonRect();
+            Rectangle menusEditDeckButtonRect = _gameWindow.ComponentLocator.GetMenusEditDeckButtonRect();
 
             using Image<Bgr, byte> menusEditDeckButtonSubImg = lastFrame.Crop(menusEditDeckButtonRect);
-            int menusEditDeckButtonPx = menusEditDeckButtonSubImg.CountNonZeroInHsvRange(new Hsv(10, 70, 140), new Hsv(20, 180, 255));
+            int menusEditDeckButtonPx =
+                menusEditDeckButtonSubImg.CountNonZeroInHsvRange(new Hsv(10, 70, 140), new Hsv(20, 180, 255));
             if (menusEditDeckButtonPx > 700)
-                return EGameState.MenusDeckSelected;
+            {
+                return GameState.MenusDeckSelected;
+            }
 
             // TODO: Check for SearchGame here
             //return EGameState.SearchGame;
 
-            if (_gameResult.GameID <= _prevGameID)
-                return EGameState.Menus;
+            if (_gameResult.GameID <= _prevGameId)
+            {
+                return GameState.Menus;
+            }
 
             if (_gameResult.LocalPlayerWon)
+            {
                 GamesWonCont += 1;
+            }
 
             _nGames += 1;
-            _prevGameID = _gameResult.GameID;
+            _prevGameId = _gameResult.GameID;
 
-            return EGameState.End;
+            return GameState.End;
         }
 
         // # User interact not ready
-        using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(ComponentLocator.GetRoundsLogRect());
+        using Image<Bgr, byte> roundsLogSubImg = lastFrame.Crop(_gameWindow.ComponentLocator.GetRoundsLogRect());
         int roundsLogPx = roundsLogSubImg.CountNonZeroInHsvRange(new Hsv(20, 80, 130), new Hsv(30, 150, 180));
-        //Console.WriteLine($"roundsLogPx: {roundsLogPx}");
 
-        bool inAction = roundsLogPx > 110 && roundsLogPx < 140; // When block or attack image go darker
-        if (!inAction && roundsLogPx < 590)
-            return EGameState.UserInteractNotReady;
+        bool inAction = roundsLogPx > 110 && roundsLogPx < 140; // When board is block, attack or spell casting status 
+        if (!inAction && roundsLogPx < 430)
+        {
+            return GameState.UserInteractNotReady;
+        }
 
         // # Mulligan check
         // TODO: Could be just `CardsOnBoard.CardsMulligan.Count > 0`
-        GameClientRectangle[] localCards = _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
-        if (localCards.Length > 0 && localCards.Count(card => Math.Abs(card.TopLeftY - (WindowSize.Height * 0.6759)) < 0.05) == localCards.Length)
-            return PlayerCanInteract(lastFrame) ? EGameState.Mulligan : EGameState.UserInteractNotReady;
+        GameClientRectangle[] localCards =
+            _gameData.Rectangles.Where(card => card.CardCode != "face" && card.LocalPlayer).ToArray();
+        if (localCards.Length > 0 &&
+            localCards.Count(card => Math.Abs(card.TopLeftY - (_gameWindow.WindowSize.Height * 0.6759)) < 0.05) ==
+            localCards.Length)
+        {
+            return PlayerCanInteract(lastFrame) ? GameState.Mulligan : GameState.UserInteractNotReady;
+        }
 
         // # Block
         if (BoardDate.Cards.OpponentCardsAttackOrBlock.Count > 0)
-            return !PlayerCanInteract(lastFrame) ? EGameState.UserInteractNotReady : EGameState.Blocking;
+        {
+            return !PlayerCanInteract(lastFrame) ? GameState.UserInteractNotReady : GameState.Blocking;
+        }
 
         // # Check if it's our turn
         if (!PlayerCanInteract(lastFrame))
-            return EGameState.OpponentTurn;
+        {
+            return GameState.OpponentTurn;
+        }
 
         // # Check if local_player has the attack token
-        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(ComponentLocator.GetAttackTokenRect());
-        int numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange color space
+        using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(_gameWindow.ComponentLocator.GetAttackTokenRect());
+        int numOrangePx =
+            attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
-            return EGameState.AttackTurn;
+        {
+            return GameState.AttackTurn;
+        }
 
-        numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(10, 120, 245), new Hsv(30, 225, 255)); // Orange color space
+        numOrangePx =
+            attackTokenSubImg.CountNonZeroInHsvRange(
+                new Hsv(10, 120, 245),
+                new Hsv(30, 225, 255)
+            ); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
-            return EGameState.AttackTurn;
+        {
+            return GameState.AttackTurn;
+        }
 
-        return EGameState.DefendTurn;
+        return GameState.DefendTurn;
     }
 
     /// <summary>
@@ -533,7 +482,7 @@ public sealed class StateMachine : IDisposable
          The indices that satisfy the condition are added to the manaVals list.
          */
 
-        Rectangle manaRect = ComponentLocator.GetManaRect();
+        Rectangle manaRect = _gameWindow.ComponentLocator.GetManaRect();
 
         var manaVals = new List<(int Number, double Ratio)>();
         for (int retryCount = 0; retryCount < maxRetry; retryCount++)
@@ -585,13 +534,14 @@ public sealed class StateMachine : IDisposable
     private int GetSpellMana(Image<Bgr, byte>[] frames)
     {
         Image<Bgr, byte> lastFrame = frames[0];
-        Rectangle[] spellManaRect = ComponentLocator.GetSpellManaRect();
+        Rectangle[] spellManaRect = _gameWindow.ComponentLocator.GetSpellManaRect();
 
         int spellMana = 0;
         foreach (Rectangle curManaRect in spellManaRect)
         {
             using Image<Bgr, byte> turnBtnSubImg = lastFrame.Crop(curManaRect);
-            int numBluePx = turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
+            int numBluePx =
+                turnBtnSubImg.CountNonZeroInHsvRange(new Hsv(5, 200, 200), new Hsv(260, 255, 255)); // Blue color space
             if (numBluePx <= 40)
                 break;
 
@@ -608,34 +558,25 @@ public sealed class StateMachine : IDisposable
     /// <returns>A tuple containing the current Nexus health values for the player and the opponent.</returns>
     private (int NexusHealth, int OpponentNexusHealth) GetNexusHealth(Image<Bgr, byte>[] frames)
     {
-        var color = new[]
-        {
-            (new Hsv(0, 0, 230), new Hsv(180, 70, 255))
-        }; // White
+        var color = new[] { (new Hsv(0, 0, 230), new Hsv(180, 70, 255)) }; // White
         Image<Bgr, byte> image = frames[0];
-        (Rectangle player, Rectangle opponent) = ComponentLocator.GetNexusHealthRect();
+        (Rectangle player, Rectangle opponent) = _gameWindow.ComponentLocator.GetNexusHealthRect();
 
         using Image<Bgr, byte> playerCropImg = image.Crop(player);
-        (int playerNumber, float _) = playerCropImg.ReadNumberFromImage(_ocrHelper, color);
-        if (playerNumber == -1)
+        (int playerNexus, float _) = playerCropImg.ReadNumberFromImage(_ocrHelper, color);
+        if (playerNexus == -1)
+        {
             return (-1, -1);
+        }
 
         using Image<Bgr, byte> opponentCropImg = image.Crop(opponent);
-        (int opponentNumber, float _) = opponentCropImg.ReadNumberFromImage(_ocrHelper, color);
-        if (opponentNumber == -1)
+        (int opponentNexus, float _) = opponentCropImg.ReadNumberFromImage(_ocrHelper, color);
+        if (opponentNexus == -1)
+        {
             return (-1, -1);
+        }
 
-        return (playerNumber, opponentNumber);
-    }
-
-    /// <summary>
-    /// Updates the client information.
-    /// </summary>
-    public void UpdateClientInfo()
-    {
-        GameWindowHandle = GetWindowHandle();
-        (WindowLocation, WindowSize) = GetWindowRectInfo();
-        GameIsForeground = GetGameIsForeground();
+        return (playerNexus, opponentNexus);
     }
 
     /// <summary>
@@ -644,20 +585,21 @@ public sealed class StateMachine : IDisposable
     /// <param name="ct">The cancellation token.</param>
     public async Task UpdateGameDataAsync(CancellationToken ct = default)
     {
-        if (GameWindowHandle == IntPtr.Zero)
-            throw new Exception($"'{nameof(UpdateClientInfo)}' must to be called at least once before calling this function.");
-
-        Image<Bgr, byte>[] frames = GetFrames();
+        Image<Bgr, byte>[] frames = _gameWindow.GetFrames(framesCount: 4, delay: 8);
 
         // Client API
-        _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
-        _gameData = await GetGameDataAsync(ct).ConfigureAwait(false); // TODO: Make it update function to not instantiate new instance every time
+        // TODO: Make it update function, not to instantiate new instance every time
+        _gameResult = await GetGameResultAsync(ct).ConfigureAwait(false);
+
+        // TODO: Make it update function, not to instantiate new instance every time
+        _gameData = await GetGameDataAsync(ct).ConfigureAwait(false);
+
         await UpdateActiveDeckAsync(ct).ConfigureAwait(false);
-        await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // Must to be called before 'GetGameState'
+        await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // Must be called before 'GetGameState'
 
         // Game
         GameState = GetGameState(frames);
-        if (GameState is not EGameState.Menus and not EGameState.MenusDeckSelected)
+        if (GameState is not GameState.Menus and not GameState.MenusDeckSelected and not GameState.End)
         {
             BoardDate.Mana = GetMana(frames);
             BoardDate.SpellMana = GetSpellMana(frames);
@@ -666,14 +608,23 @@ public sealed class StateMachine : IDisposable
 
         // Clean
         foreach (Image<Bgr, byte> frame in frames)
+        {
             frame.Dispose();
+        }
 
-        bool isMyTurn = GameState is EGameState.Attacking or EGameState.Blocking or EGameState.AttackTurn or EGameState.DefendTurn;
+        bool isMyTurn = GameState is GameState.Attacking
+            or GameState.Blocking
+            or GameState.AttackTurn
+            or GameState.DefendTurn;
         if (isMyTurn && BoardDate.Mana == -1)
-            await Console.Error.WriteLineAsync("Unknown mana").ConfigureAwait(false);
+        {
+            _logger?.LogWarning("Can't recognize mana value.");
+        }
 
-        if (GameState != EGameState.End)
+        if (GameState != GameState.End)
+        {
             return;
+        }
 
         BoardDate.Cards.Clear();
         BoardDate.Mana = 0;
