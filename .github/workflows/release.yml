@@ -33,7 +33,7 @@ jobs:
       - name: Zip release
         run: |
           cd ${{env.DOTNET_ROOT}}/LorAuto/
-          zip -r ${{env.DOTNET_ROOT}}/LorAuto/release.zip ./*
+          zip -r /LorAuto/release.zip ./*
 
   release:
     runs-on: ubuntu-latest
@@ -45,12 +45,12 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: LorAuto
-          path: ${{env.DOTNET_ROOT}}/LorAuto/release.zip
+          path: /LorAuto/release.zip
 
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ${{env.DOTNET_ROOT}}/LorAuto/release.zip
+          artifacts: /LorAuto/release.zip
           makeLatest: true
           generateReleaseNotes: true
           draft: false
