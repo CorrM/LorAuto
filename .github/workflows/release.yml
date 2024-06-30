@@ -25,10 +25,10 @@ jobs:
         run: |
           dotnet publish "src/LorAuto.Cli" -c Release -r win-x64 -p:PublishSingleFile=true --no-self-contained --nologo -o ${{env.DOTNET_ROOT}}/LorAuto
 
-      - name: Copy plugins # It's not the best way to do it, but it'll work for now.
+      - name: Copy plugins # It's not the best way, but it'll work for now.
         run: |
           mkdir -p ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy
-          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net7.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
+          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net8.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
 
       - name: Zip release
         run: |
