@@ -269,7 +269,7 @@ internal sealed class UserSimulator
 
             // Update game status. otherwise game status will be 'Menus'.
             stateMachine.UpdateGameDataAsync().GetAwaiter().GetResult();
-            if (stateMachine.GameState is GameState.MenusDeckSelected)
+            if (stateMachine.BoardDate.GameState is GameState.MenusDeckSelected)
             {
                 break;
             }

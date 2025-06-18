@@ -15,14 +15,15 @@ public abstract class StrategyPlugin : PluginBase
     /// <summary>
     /// Gets the list of playable hand cards based on the current board state and available resources.
     /// </summary>
-    /// <param name="boardCards">The board cards containing the player's hand cards.</param>
-    /// <param name="mana">The available mana.</param>
-    /// <param name="spellMana">The available spell mana.</param>
+    /// <param name="boardData">The current game board data.</param>
     /// <returns>A list of playable hand cards.</returns>
-    public virtual List<InGameCard> GetPlayableHandCards(BoardCards boardCards, int mana, int spellMana)
+    public virtual List<InGameCard> GetPlayableHandCards(GameBoardData boardData)
     {
-        return boardCards.CardsHand
-            .Where(card => card.Cost <= mana || (card.Type == EGameCardType.Spell && card.Cost <= mana + spellMana))
+        return boardData.Cards.CardsHand
+            .Where(card =>
+                (card.Cost <= boardData.Mana ||
+                 (card.Type == EGameCardType.Spell && card.Cost <= boardData.Mana + boardData.SpellMana)) &&
+                (boardData.GameState == GameState.MidAttack && card.Type != EGameCardType.Unit))
             .OrderByDescending(card => card.Cost)
             .ToList();
     }
@@ -39,14 +40,10 @@ public abstract class StrategyPlugin : PluginBase
     /// </summary>
     /// <param name="boardData">The current game board data.</param>
     /// <param name="gameState">The current game state.</param>
-    /// <param name="mana">The available mana.</param>
-    /// <param name="spellMana">The available spell mana.</param>
     /// <returns>A tuple containing the played hand card and its target selector (if applicable).</returns>
     public abstract (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(
         GameBoardData boardData,
-        GameState gameState,
-        int mana,
-        int spellMana
+        GameState gameState
     );
 
     /// <summary>
@@ -65,24 +62,18 @@ public abstract class StrategyPlugin : PluginBase
     /// </summary>
     /// <param name="boardData">The current game board data.</param>
     /// <param name="gameState">The current game state.</param>
-    /// <param name="mana">The available mana.</param>
-    /// <param name="spellMana">The available spell mana.</param>
     /// <returns>The action to perform in response to the opponent's action.</returns>
     public abstract EGamePlayAction RespondToOpponentAction(
         GameBoardData boardData,
-        GameState gameState,
-        int mana,
-        int spellMana
+        GameState gameState
     );
 
     /// <summary>
     /// Determines the action to take for using attack tokens.
     /// </summary>
     /// <param name="boardData">The current game board data.</param>
-    /// <param name="mana">The available mana.</param>
-    /// <param name="spellMana">The available spell mana.</param>
     /// <returns>The action to take for using attack tokens.</returns>
-    public abstract EGamePlayAction AttackTokenUsage(GameBoardData boardData, int mana, int spellMana);
+    public abstract EGamePlayAction AttackTokenUsage(GameBoardData boardData);
 
     /// <summary>
     /// Performs the attack action on the opponent's board.

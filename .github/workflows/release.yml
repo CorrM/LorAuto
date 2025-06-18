@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-    - '*'
+      - "*"
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
       - name: Setup .NET Core SDK
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.x.x'
+          dotnet-version: "9.x.x"
 
       - name: Build
         run: dotnet build -c Release
@@ -28,7 +28,7 @@ jobs:
       - name: Copy plugins # It's not the best way, but it'll work for now.
         run: |
           mkdir -p ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy
-          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net8.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
+          cp -R ./src/LorAuto.Strategy.Generic/bin/Release/net9.0-windows/Generic.dll ${{env.DOTNET_ROOT}}/LorAuto/Plugins/Strategy/
 
       - name: Zip release
         run: |
@@ -50,4 +50,3 @@ jobs:
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-

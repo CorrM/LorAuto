@@ -110,7 +110,7 @@ public sealed class LorBot : IDisposable
             out List<CardTargetSelector>? spellsToUse
         );
 
-        foreach ((InGameCard? myCard, InGameCard? opponentCard) in blockCards)
+        foreach ((InGameCard myCard, InGameCard opponentCard) in blockCards)
         {
             // Update before block
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
@@ -150,7 +150,7 @@ public sealed class LorBot : IDisposable
         _userSimulator.ResetMousePosition();
 
         // TODO: Should beak from that loop, if the opponent uses a spell while me blocking and i have a spell to response
-        for (int i = 0; _stateMachine.GameState == GameState.Blocking && i < 10; ++i)
+        for (int i = 0; _stateMachine.BoardDate.GameState == GameState.Blocking && i < 10; ++i)
         {
             await Task.Delay(1000, ct).ConfigureAwait(false);
             await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
@@ -171,9 +171,7 @@ public sealed class LorBot : IDisposable
         // TODO: What if card have To Play pick one option like (PETTY OFFICER)
         (InGameCard HandCard, CardTargetSelector? Target)? playHandCard = _strategy.PlayHandCard(
             _stateMachine.BoardDate,
-            _stateMachine.GameState,
-            _stateMachine.BoardDate.Mana,
-            _stateMachine.BoardDate.SpellMana
+            _stateMachine.BoardDate.GameState
         );
 
         if (playHandCard is null)
@@ -189,21 +187,22 @@ public sealed class LorBot : IDisposable
         return true;
     }
 
+    // TODO: This method should not take any action, Strategy should take care of it
     /// <summary>
     /// Handles stuff needs to be done before the DefendTurn or AttackTurn phase of the game.
     /// </summary>
     /// <param name="gameState">The current game state.</param>
     /// <param name="ct">The cancellation token (optional).</param>
-    /// <returns><c>true</c> if an action is handled; otherwise, <c>false</c>.</returns>
+    /// <returns><c>true</c> if an action is handled; otherwise <c>false</c>.</returns>
     private async Task<bool> PreDefendOrAttackAsync(GameState gameState, CancellationToken ct = default)
     {
         // Update cards
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
-        // TODO: Add spell counter to strategy, as this condition is just skip opponent spells 
+        // TODO: Add spell counter to strategy, as this condition is just skips opponent spells 
         if (_stateMachine.BoardDate.Cards.SpellStack.Count != 0 &&
-            _stateMachine.BoardDate.Cards.SpellStack.TrueForAll(
-                card => card.Type is EGameCardType.Spell or EGameCardType.Ability
+            _stateMachine.BoardDate.Cards.SpellStack.TrueForAll(card =>
+                card.Type is EGameCardType.Spell or EGameCardType.Ability
             ))
         {
             _userSimulator.CommitOrPassOrSkipTurn();
@@ -214,17 +213,8 @@ public sealed class LorBot : IDisposable
 
         // Determinate what to do
         EGamePlayAction gamePlayAction = gameState == GameState.DefendTurn
-            ? _strategy.RespondToOpponentAction(
-                _stateMachine.BoardDate,
-                _stateMachine.GameState,
-                _stateMachine.BoardDate.Mana,
-                _stateMachine.BoardDate.SpellMana
-            )
-            : _strategy.AttackTokenUsage(
-                _stateMachine.BoardDate,
-                _stateMachine.BoardDate.Mana,
-                _stateMachine.BoardDate.SpellMana
-            );
+            ? _strategy.RespondToOpponentAction(_stateMachine.BoardDate, _stateMachine.BoardDate.GameState)
+            : _strategy.AttackTokenUsage(_stateMachine.BoardDate);
         if (gamePlayAction == EGamePlayAction.Skip)
         {
             _userSimulator.CommitOrPassOrSkipTurn();
@@ -235,11 +225,7 @@ public sealed class LorBot : IDisposable
         }
 
         // Play card from hand
-        List<InGameCard> playableCards = _strategy.GetPlayableHandCards(
-            _stateMachine.BoardDate.Cards,
-            _stateMachine.BoardDate.Mana,
-            _stateMachine.BoardDate.SpellMana
-        );
+        List<InGameCard> playableCards = _strategy.GetPlayableHandCards(_stateMachine.BoardDate);
         if (playableCards.Count <= 0 || gamePlayAction != EGamePlayAction.PlayCards)
             return false;
 
@@ -329,9 +315,9 @@ public sealed class LorBot : IDisposable
         //       That will count as 'GameState.Blocking'
         await _stateMachine.UpdateGameDataAsync(ct).ConfigureAwait(false);
 
-        _logger?.LogInformation("Current game state: {GameState}", _stateMachine.GameState);
+        _logger?.LogInformation("Current game state: {GameState}", _stateMachine.BoardDate.GameState);
         // TODO: Add a way to detect 'GameState.SearchGame' so this statement doesnt get called more than once
-        switch (_stateMachine.GameState)
+        switch (_stateMachine.BoardDate.GameState)
         {
             case GameState.None:
                 return false;
@@ -366,9 +352,10 @@ public sealed class LorBot : IDisposable
                 break;
 
             case GameState.AttackTurn:
+            case GameState.MidAttack:
                 await AttackAsync(ct).ConfigureAwait(false);
                 break;
-
+            
             case GameState.Attacking:
                 break;
 

@@ -238,5 +238,10 @@ public enum EGameCardKeyword
     /// <summary>
     /// The "Deathless" keyword.
     /// </summary>
-    Deathless
+    Deathless,
+    
+    /// <summary>
+    /// The "Spirit" keyword.
+    /// </summary>
+    Spirit,
 }

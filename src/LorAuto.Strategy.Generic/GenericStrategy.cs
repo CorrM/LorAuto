@@ -28,14 +28,12 @@ public sealed class GenericStrategy : StrategyPlugin
 
     public override (InGameCard HandCard, CardTargetSelector? Target)? PlayHandCard(
         GameBoardData boardData,
-        GameState gameState,
-        int mana,
-        int spellMana
+        GameState gameState
     )
     {
-        InGameCard? cardToPlay = GetPlayableHandCards(boardData.Cards, mana, spellMana)
+        InGameCard? cardToPlay = GetPlayableHandCards(boardData)
             .Where(c => c.Type != EGameCardType.Spell)
-            .Where(c => c.Cost <= mana && !c.Description.StartsWith("To play me"))
+            .Where(c => c.Cost <= boardData.Mana && !c.Description.StartsWith("To play me"))
             .MaxBy(c => c.Attack);
 
         if (cardToPlay is null)
@@ -96,17 +94,12 @@ public sealed class GenericStrategy : StrategyPlugin
         return ret;
     }
 
-    public override EGamePlayAction RespondToOpponentAction(
-        GameBoardData boardData,
-        GameState gameState,
-        int mana,
-        int spellMana
-    )
+    public override EGamePlayAction RespondToOpponentAction(GameBoardData boardData, GameState gameState)
     {
         return EGamePlayAction.PlayCards;
     }
 
-    public override EGamePlayAction AttackTokenUsage(GameBoardData boardData, int mana, int spellMana)
+    public override EGamePlayAction AttackTokenUsage(GameBoardData boardData)
     {
         // Open attack if opponent have no card to block
         return boardData.Cards.OpponentCardsBoard.Count == 0 ? EGamePlayAction.Attack : EGamePlayAction.PlayCards;

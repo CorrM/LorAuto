@@ -56,6 +56,11 @@ public enum GameState
     AttackTurn,
 
     /// <summary>
+    /// MidAttack state.
+    /// </summary>
+    MidAttack,
+    
+    /// <summary>
     /// Attacking state.
     /// </summary>
     Attacking,

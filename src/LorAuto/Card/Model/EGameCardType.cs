@@ -31,7 +31,7 @@ public enum EGameCardType
     Landmark,
 
     /// <summary>
-    /// Indicates that the card is an equipment.
+    /// Indicates that the card is equipment.
     /// </summary>
-    Equipment
+    Equipment,
 }

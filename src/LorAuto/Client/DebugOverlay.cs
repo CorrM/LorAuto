@@ -92,7 +92,7 @@ internal sealed class DebugOverlay : IDisposable
 
         using SolidBrush gBrush = _windowGfx.CreateSolidBrush(0, 255, 0);
 
-        if (_stateMachine.GameState is not (GameState.Menus or GameState.MenusDeckSelected or GameState.End))
+        if (_stateMachine.BoardDate.GameState is not (GameState.Menus or GameState.MenusDeckSelected or GameState.End))
         {
             DrawSpellMana(gBrush);
 

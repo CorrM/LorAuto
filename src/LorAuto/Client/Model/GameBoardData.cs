@@ -8,6 +8,11 @@ namespace LorAuto.Client.Model;
 public sealed class GameBoardData
 {
     /// <summary>
+    /// Gets the current game state.
+    /// </summary>
+    public GameState GameState { get; internal set; }
+    
+    /// <summary>
     /// Gets the cards present on the game board.
     /// </summary>
     public BoardCards Cards { get; }

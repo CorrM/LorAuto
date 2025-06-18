@@ -41,11 +41,6 @@ internal sealed class StateMachine : IDisposable
     public int GamesWonCont { get; private set; }
 
     /// <summary>
-    /// Gets the current game state.
-    /// </summary>
-    public GameState GameState { get; private set; }
-
-    /// <summary>
     /// Gets the game board data.
     /// </summary>
     public GameBoardData BoardDate { get; }
@@ -433,10 +428,16 @@ internal sealed class StateMachine : IDisposable
             return PlayerCanInteract(lastFrame) ? GameState.Mulligan : GameState.UserInteractNotReady;
         }
 
-        // # Block
+        // # Blocking
         if (BoardDate.Cards.OpponentCardsAttackOrBlock.Count > 0)
         {
             return !PlayerCanInteract(lastFrame) ? GameState.UserInteractNotReady : GameState.Blocking;
+        }
+        
+        // # Attacking
+        if (BoardDate.Cards.CardsAttackOrBlock.Count > 0)
+        {
+            return !PlayerCanInteract(lastFrame) ? GameState.Attacking : GameState.MidAttack;
         }
 
         // # Check if it's our turn
@@ -447,18 +448,19 @@ internal sealed class StateMachine : IDisposable
 
         // # Check if local_player has the attack token
         using Image<Bgr, byte> attackTokenSubImg = lastFrame.Crop(_gameWindow.ComponentLocator.GetAttackTokenRect());
-        int numOrangePx =
-            attackTokenSubImg.CountNonZeroInHsvRange(new Hsv(5, 120, 224), new Hsv(25, 255, 255)); // Orange color space
+        int numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(
+            new Hsv(5, 120, 224),
+            new Hsv(25, 255, 255)
+        ); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
         {
             return GameState.AttackTurn;
         }
 
-        numOrangePx =
-            attackTokenSubImg.CountNonZeroInHsvRange(
-                new Hsv(10, 120, 245),
-                new Hsv(30, 225, 255)
-            ); // Orange color space
+        numOrangePx = attackTokenSubImg.CountNonZeroInHsvRange(
+            new Hsv(10, 120, 245),
+            new Hsv(30, 225, 255)
+        ); // Orange color space
         if (numOrangePx > 1000) // Not enough orange pixels for attack token
         {
             return GameState.AttackTurn;
@@ -598,8 +600,8 @@ internal sealed class StateMachine : IDisposable
         await UpdateCardsOnBoardAsync(frames, ct).ConfigureAwait(false); // Must be called before 'GetGameState'
 
         // Game
-        GameState = GetGameState(frames);
-        if (GameState is not GameState.Menus and not GameState.MenusDeckSelected and not GameState.End)
+        BoardDate.GameState = GetGameState(frames);
+        if (BoardDate.GameState is not GameState.Menus and not GameState.MenusDeckSelected and not GameState.End)
         {
             BoardDate.Mana = GetMana(frames);
             BoardDate.SpellMana = GetSpellMana(frames);
@@ -612,7 +614,7 @@ internal sealed class StateMachine : IDisposable
             frame.Dispose();
         }
 
-        bool isMyTurn = GameState is GameState.Attacking
+        bool isMyTurn = BoardDate.GameState is GameState.Attacking
             or GameState.Blocking
             or GameState.AttackTurn
             or GameState.DefendTurn;
@@ -621,7 +623,7 @@ internal sealed class StateMachine : IDisposable
             _logger?.LogWarning("Can't recognize mana value.");
         }
 
-        if (GameState != GameState.End)
+        if (BoardDate.GameState != GameState.End)
         {
             return;
         }
